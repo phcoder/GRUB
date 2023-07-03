@@ -23,6 +23,7 @@
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/dl.h>
+#include <grub/gpt_partition.h>
 #include <grub/msdos_partition.h>
 #include <grub/i18n.h>
 
@@ -31,6 +32,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #ifdef GRUB_UTIL
 #include <grub/emu/misc.h>
 #endif
+
+static const grub_guid_t openbsd_disklabel = GRUB_GPT_PARTITION_TYPE_OPENBSD_DISKLABEL;
 
 static struct grub_partition_map grub_bsdlabel_partition_map;
 static struct grub_partition_map grub_netbsdlabel_partition_map;
@@ -139,6 +142,23 @@ bsdlabel_partition_map_iterate (grub_disk_t disk,
 	  || disk->partition->partmap == &grub_openbsdlabel_partition_map))
       return grub_error (GRUB_ERR_BAD_PART_TABLE, "no embedding supported");
 
+  if (disk->partition && grub_strcmp (disk->partition->partmap->name, "gpt") == 0)
+    {
+      struct grub_gpt_partentry entry;
+      int entry_valid = 1;
+      grub_partition_t part = disk->partition;
+      disk->partition = part->parent;
+      if (grub_disk_read (disk, part->offset, part->index,
+			  sizeof (entry), &entry))
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  entry_valid = 0;
+	}
+      disk->partition = part;
+      if (entry_valid && (grub_memcmp(&entry.type, &openbsd_disklabel, sizeof(openbsd_disklabel)) == 0))
+	return grub_error (GRUB_ERR_BAD_PART_TABLE, "no embedding supported");
+  }
+
   return iterate_real (disk, GRUB_PC_PARTITION_BSD_LABEL_SECTOR, 0,
 		       &grub_bsdlabel_partition_map, hook, hook_data);
 }
@@ -155,13 +175,9 @@ struct netopenbsdlabel_ctx
 
 /* Helper for netopenbsdlabel_partition_map_iterate.  */
 static int
-check_msdos (grub_disk_t dsk, const grub_partition_t partition, void *data)
+iterate_netopenbsd_subpart(grub_disk_t dsk, const grub_partition_t partition, struct netopenbsdlabel_ctx *ctx)
 {
-  struct netopenbsdlabel_ctx *ctx = data;
   grub_err_t err;
-
-  if (partition->msdostype != ctx->type)
-    return 0;
 
   err = iterate_real (dsk, partition->start
 		      + GRUB_PC_PARTITION_BSD_LABEL_SECTOR, 0, ctx->pmap,
@@ -180,6 +196,40 @@ check_msdos (grub_disk_t dsk, const grub_partition_t partition, void *data)
   return 0;
 }
 
+/* Helper for netopenbsdlabel_partition_map_iterate.  */
+static int
+check_msdos (grub_disk_t dsk, const grub_partition_t partition, void *data)
+{
+  struct netopenbsdlabel_ctx *ctx = data;
+
+  if (partition->msdostype != ctx->type)
+    return 0;
+
+  return iterate_netopenbsd_subpart(dsk, partition, ctx);
+}
+
+/* Helper for netopenbsdlabel_partition_map_iterate.  */
+static int
+check_gpt_openbsd (grub_disk_t dsk, const grub_partition_t partition, void *data)
+{
+  struct netopenbsdlabel_ctx *ctx = data;
+  struct grub_gpt_partentry entry;
+
+  if (grub_disk_read (dsk, partition->offset, partition->index,
+		      sizeof (entry), &entry))
+    {
+      grub_print_error();
+      return 0;
+    }
+
+  if (grub_memcmp(&entry.type, &openbsd_disklabel, sizeof(openbsd_disklabel)) != 0)
+    {
+      return 0;
+    }
+
+  return iterate_netopenbsd_subpart(dsk, partition, ctx);
+}
+
 /* This is a total breakage. Even when net-/openbsd label is inside partition
    it actually describes the whole disk.
  */
@@ -189,8 +239,8 @@ netopenbsdlabel_partition_map_iterate (grub_disk_t disk, grub_uint8_t type,
 				       grub_partition_iterate_hook_t hook,
 				       void *hook_data)
 {
-  if (disk->partition && grub_strcmp (disk->partition->partmap->name, "msdos")
-      == 0)
+  if (disk->partition &&
+      (grub_strcmp (disk->partition->partmap->name, "msdos") == 0 || grub_strcmp (disk->partition->partmap->name, "gpt") == 0))
     return grub_error (GRUB_ERR_BAD_PART_TABLE, "no embedding supported");
 
   {
@@ -201,12 +251,20 @@ netopenbsdlabel_partition_map_iterate (grub_disk_t disk, grub_uint8_t type,
       .hook_data = hook_data,
       .count = 0
     };
-    grub_err_t err;
+    grub_err_t err_msdos;
 
-    err = grub_partition_msdos_iterate (disk, check_msdos, &ctx);
+    err_msdos = grub_partition_msdos_iterate (disk, check_msdos, &ctx);
+    if (err_msdos == GRUB_ERR_BAD_PART_TABLE && type == GRUB_PC_PARTITION_TYPE_OPENBSD)
+      {
+	grub_errno = GRUB_ERR_NONE;
+	if (grub_gpt_partition_map_iterate (disk, check_gpt_openbsd, &ctx))
+	  return grub_error (GRUB_ERR_BAD_PART_TABLE, "no bsdlabel found");
+      }
 
-    if (err)
-      return err;
+    if (err_msdos == GRUB_ERR_BAD_PART_TABLE)
+      grub_errno = GRUB_ERR_NONE;
+    else if (err_msdos)
+      return err_msdos;
     if (!ctx.count)
       return grub_error (GRUB_ERR_BAD_PART_TABLE, "no bsdlabel found");
   }
