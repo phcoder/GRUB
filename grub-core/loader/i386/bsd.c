@@ -40,6 +40,8 @@
 #ifdef GRUB_MACHINE_PCBIOS
 #include <grub/machine/int.h>
 #endif
+#include <grub/acpi.h>
+#include <grub/smbios.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -48,10 +50,11 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #include <grub/machine/biosnum.h>
 #endif
 #ifdef GRUB_MACHINE_EFI
+#include <grub/coreboot/lbio.h>
 #include <grub/efi/efi.h>
-#define NETBSD_DEFAULT_VIDEO_MODE "800x600"
+#define BSD_DEFAULT_VIDEO_MODE "800x600"
 #else
-#define NETBSD_DEFAULT_VIDEO_MODE "text"
+#define BSD_DEFAULT_VIDEO_MODE "text"
 #include <grub/i386/pc/vbe.h>
 #endif
 #include <grub/video.h>
@@ -76,6 +79,11 @@ static int is_elf_kernel, is_64bit;
 static grub_uint32_t openbsd_root;
 static struct grub_relocator *relocator = NULL;
 static struct grub_openbsd_ramdisk_descriptor openbsd_ramdisk;
+#ifdef GRUB_MACHINE_EFI
+static struct grub_openbsd_bootarg_efiinfo openbsd_efi_info;
+#endif
+
+static grub_err_t grub_bsd_setup_video (void);
 
 struct bsd_tag
 {
@@ -219,7 +227,7 @@ grub_bsd_get_device (grub_uint32_t * biosdev,
 }
 
 static grub_err_t
-grub_bsd_add_meta_ptr (grub_uint32_t type, void **ptr, grub_uint32_t len)
+grub_bsd_add_meta_ptr (grub_uint32_t type, void **ptr, grub_uint32_t len, int is_kernel_tag)
 {
   struct bsd_tag *newtag;
 
@@ -231,8 +239,7 @@ grub_bsd_add_meta_ptr (grub_uint32_t type, void **ptr, grub_uint32_t len)
   newtag->next = NULL;
   *ptr = newtag->data;
 
-  if (kernel_type == KERNEL_TYPE_FREEBSD
-      && type == (FREEBSD_MODINFO_METADATA | FREEBSD_MODINFOMD_SMAP))
+  if (kernel_type == KERNEL_TYPE_FREEBSD && is_kernel_tag)
     {
       struct bsd_tag *p;
       for (p = tags;
@@ -259,20 +266,34 @@ grub_bsd_add_meta_ptr (grub_uint32_t type, void **ptr, grub_uint32_t len)
   return GRUB_ERR_NONE;
 }
 
-grub_err_t
-grub_bsd_add_meta (grub_uint32_t type, const void *data, grub_uint32_t len)
+static grub_err_t
+grub_bsd_add_meta_real (grub_uint32_t type, const void *data, grub_uint32_t len, int is_kernel_tag)
 {
   grub_err_t err;
   void *ptr = NULL;
 
-  err = grub_bsd_add_meta_ptr (type, &ptr, len);
+  err = grub_bsd_add_meta_ptr (type, &ptr, len, is_kernel_tag);
   if (err)
     return err;
-  if (len)
+  if (data && len)
     grub_memcpy (ptr, data, len);
+  else if (!data && len)
+    grub_memset (ptr, 0, len);
+
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_bsd_add_kernel_meta (grub_uint32_t type, const void *data, grub_uint32_t len)
+{
+  return grub_bsd_add_meta_real (type, data, len, 1);
+}
+
+grub_err_t
+grub_bsd_add_meta (grub_uint32_t type, const void *data, grub_uint32_t len)
+{
+  return grub_bsd_add_meta_real (type, data, len, 0);
+}
 
 struct grub_e820_mmap
 {
@@ -404,8 +425,8 @@ grub_bsd_add_mmap (void)
   else if (kernel_type == KERNEL_TYPE_OPENBSD)
     grub_bsd_add_meta (OPENBSD_BOOTARG_MMAP, buf0, len);
   else
-    grub_bsd_add_meta (FREEBSD_MODINFO_METADATA |
-		       FREEBSD_MODINFOMD_SMAP, buf0, len);
+    grub_bsd_add_kernel_meta (FREEBSD_MODINFO_METADATA |
+			      FREEBSD_MODINFOMD_SMAP, buf0, len);
 
   grub_free (buf0);
 
@@ -462,7 +483,7 @@ grub_freebsd_add_meta_module (const char *filename, const char *type,
 	  void *cmdline;
 	  char *p;
 
-	  if (grub_bsd_add_meta_ptr (FREEBSD_MODINFO_ARGS, &cmdline, n))
+	  if (grub_bsd_add_meta_ptr (FREEBSD_MODINFO_ARGS, &cmdline, n, 0))
 	    return grub_errno;
 
 	  p = cmdline;
@@ -592,6 +613,80 @@ freebsd_get_zfs (void)
   grub_free (uuid);
 }
 
+#ifdef GRUB_MACHINE_EFI
+
+#define NEXT_MEMORY_DESCRIPTOR(desc, size)	\
+  ((grub_efi_memory_descriptor_t *) ((char *) (desc) + (size)))
+
+static void
+grub_swap_buffers(void *a, void *b, grub_size_t n)
+{
+  grub_uint8_t *ap = a, *bp = b;
+  for (; n; n--, ap++, bp++)
+    {
+      grub_uint8_t t = *ap;
+      *ap = *bp;
+      *bp = t;
+    }
+}
+
+static void
+grub_efi_sort_memory_map(void *buf, grub_efi_uintn_t desc_size, grub_efi_uintn_t mmap_size)
+{
+  int done_any = 1;
+
+  while (done_any)
+    {
+      grub_efi_memory_descriptor_t *d_cur = buf;
+      grub_efi_memory_descriptor_t *d_next = NEXT_MEMORY_DESCRIPTOR(d_cur, desc_size);
+
+      done_any = 0;
+      for (; d_next < NEXT_MEMORY_DESCRIPTOR(buf, mmap_size);
+	   d_cur = d_next, d_next = NEXT_MEMORY_DESCRIPTOR(d_cur, desc_size))
+	{
+	  if (d_next->physical_start < d_cur->physical_start)
+	    {
+	      done_any = 1;
+	      grub_swap_buffers(d_cur, d_next, desc_size);
+	    }
+	}
+    }
+}
+
+static int
+iterate_get_zerotables_size (grub_linuxbios_table_item_t table_item, void *data)
+{
+  grub_uint64_t *ret = data;
+  mem_region_t mem_region;
+
+  if (table_item->tag != GRUB_LINUXBIOS_MEMBER_MEMORY)
+    return 0;
+
+  mem_region =
+    (mem_region_t) ((long) table_item +
+			       sizeof (struct grub_linuxbios_table_item));
+  for (; (long) mem_region < (long) table_item + (long) table_item->size;
+       mem_region++)
+    {
+      if (mem_region->type == GRUB_MEMORY_COREBOOT_TABLES
+	  && mem_region->addr == 0 && *ret < mem_region->addr + mem_region->size)
+	*ret = mem_region->addr + mem_region->size;
+    }
+
+  return 0;
+}
+
+static grub_uint64_t
+grub_coreboot_get_zerotables_size(void)
+{
+  grub_uint64_t ret = 0;
+
+  grub_linuxbios_table_iterate (iterate_get_zerotables_size, &ret);
+
+  return ret;
+}
+#endif
+
 static grub_err_t
 grub_freebsd_boot (void)
 {
@@ -603,6 +698,34 @@ grub_freebsd_boot (void)
   grub_size_t tag_buf_len = 0;
 
   struct grub_env_var *var;
+
+  err = grub_bsd_setup_video ();
+  if (err)
+    {
+      grub_print_error ();
+      grub_puts_ (N_("Booting in blind mode"));
+      grub_errno = GRUB_ERR_NONE;
+    }
+
+#ifdef GRUB_MACHINE_EFI
+  err = grub_bsd_add_kernel_meta (FREEBSD_MODINFO_METADATA |
+				  FREEBSD_MODINFOMD_FW_HANDLE,
+				  &grub_efi_system_table,
+				  sizeof (grub_efi_system_table));
+  if (err)
+    return err;
+
+  grub_uint32_t efi_mmap_size = 0;
+
+  efi_mmap_size = 2 * grub_efi_find_mmap_size ();
+
+  err = grub_bsd_add_kernel_meta (FREEBSD_MODINFO_METADATA | FREEBSD_MODINFOMD_EFI_MAP ,
+				  NULL,
+				  sizeof(struct grub_freebsd_btinfo_efi_map_header)
+				  + efi_mmap_size);
+  if (err)
+    return err;
+#endif
 
   grub_memset (&bi, 0, sizeof (bi));
   bi.version = FREEBSD_BOOTINFO_VERSION;
@@ -618,6 +741,30 @@ grub_freebsd_boot (void)
 	p_size++;
 	p_size += grub_strlen (var->value) + 1;
       }
+
+  grub_addr_t rsdp = (grub_addr_t) grub_acpi_get_rsdpv2() ?: (grub_addr_t) grub_acpi_get_rsdpv1();
+  grub_addr_t smbios = (grub_addr_t) grub_smbios_get_eps3() ?: (grub_addr_t) grub_smbios_get_eps();
+  char rsdp_buf[sizeof("acpi.rsdp=") + 22];
+  char hint_rsdp_buf[sizeof("hint.acpi.0.rsdp=") + 22];
+  char smbios_buf[sizeof("hint.smbios.0.mem=") + 22];
+
+  grub_memset (rsdp_buf, 0, sizeof(rsdp_buf));
+  grub_memset (hint_rsdp_buf, 0, sizeof(hint_rsdp_buf));
+  grub_memset (smbios_buf, 0, sizeof(smbios_buf));
+  if (rsdp)
+    {
+      grub_snprintf(rsdp_buf, sizeof(rsdp_buf) - 2, "acpi.rsdp=0x%llx", (unsigned long long) rsdp);
+      p_size += grub_strlen (rsdp_buf) + 1;
+      // pre-10 FreeBSD
+      grub_snprintf(hint_rsdp_buf, sizeof(hint_rsdp_buf) - 2, "hint.acpi.0.rsdp=0x%llx", (unsigned long long) rsdp);
+      p_size += grub_strlen (hint_rsdp_buf) + 1;
+    }
+
+  if (smbios)
+    {
+      grub_snprintf(smbios_buf, sizeof(smbios_buf) - 2, "hint.smbios.0.mem=0x%llx", (unsigned long long) smbios);
+      p_size += grub_strlen (smbios_buf) + 1;
+    }
 
   if (p_size)
     p_size = ALIGN_PAGE (kern_end + p_size + 1) - kern_end;
@@ -660,12 +807,25 @@ grub_freebsd_boot (void)
   FOR_SORTED_ENV (var)
     if ((grub_memcmp (var->name, "kFreeBSD.", sizeof("kFreeBSD.") - 1) == 0) && (var->name[sizeof("kFreeBSD.") - 1]))
       {
-	grub_strcpy ((char *) p, &var->name[sizeof("kFreeBSD.") - 1]);
-	p += grub_strlen ((char *) p);
-	*(p++) = '=';
-	grub_strcpy ((char *) p, var->value);
-	p += grub_strlen ((char *) p) + 1;
+	p = (grub_uint8_t *) grub_stpcpy ((char *) p, &var->name[sizeof("kFreeBSD.") - 1]);
+	*p++ = '=';
+	p = (grub_uint8_t *) grub_stpcpy ((char *) p, var->value);
+	*p++ = '\0';
       }
+
+  if (rsdp)
+    {
+      p = (grub_uint8_t *) grub_stpcpy ((char *) p, rsdp_buf);
+      *p++ = '\0';
+      p = (grub_uint8_t *) grub_stpcpy ((char *) p, hint_rsdp_buf);
+      *p++ = '\0';
+    }
+
+  if (smbios)
+    {
+      p = (grub_uint8_t *) grub_stpcpy ((char *) p, smbios_buf);
+      *p++ = '\0';
+    }
 
   if (p != p0)
     {
@@ -673,6 +833,9 @@ grub_freebsd_boot (void)
 
       bi.environment = p_target;
     }
+
+  struct freebsd_tag_header *efi_memmap = 0;
+  grub_uint8_t *p_tag_start = p, *p_tag_end = p;
 
   if (is_elf_kernel)
     {
@@ -683,6 +846,8 @@ grub_freebsd_boot (void)
 	{
 	  struct freebsd_tag_header *head
 	    = (struct freebsd_tag_header *) p_tag;
+	  if (tag->type == (FREEBSD_MODINFOMD_EFI_MAP | FREEBSD_MODINFO_METADATA))
+	    efi_memmap = head;
 	  head->type = tag->type;
 	  head->len = tag->len;
 	  p_tag += sizeof (struct freebsd_tag_header);
@@ -714,46 +879,77 @@ grub_freebsd_boot (void)
 	      break;
 	    }
 	  p_tag += tag->len;
-	  p_tag = ALIGN_VAR (p_tag - p) + p;
+	  p_tag = ALIGN_VAR (p_tag - p_tag_start) + p_tag_start;
 	}
 
-      bi.tags = (p - p0) + p_target;
+      p_tag_end = p_tag;
+      bi.tags = (p_tag_start - p0) + p_target;
 
       p = (ALIGN_PAGE ((p_tag - p0) + p_target) - p_target) + p0;
     }
 
   bi.kern_end = kern_end;
 
-  grub_video_set_mode ("text", 0, 0);
+  grub_addr_t stack_target;
+  grub_uint32_t *stack;
+  grub_relocator_chunk_t ch;
+
+  err = grub_relocator_alloc_chunk_align (relocator, &ch,
+					  0x10000, 0x90000,
+					  (is_64bit ? 3 : 9) * sizeof (grub_uint32_t)
+					  + sizeof (bi), 4,
+					  GRUB_RELOCATOR_PREFERENCE_NONE,
+					  0);
+
+  if (err)
+    return err;
+  stack = get_virtual_current_address (ch);
+  stack_target = get_physical_target_address (ch);
+
+#ifdef GRUB_MACHINE_EFI
+  grub_efi_uintn_t efi_mmap_size_out = efi_mmap_size;
+  grub_efi_uintn_t efi_desc_size;
+  grub_efi_uint32_t efi_desc_version;
+  struct grub_freebsd_btinfo_efi_map_header *efi_mmap = (struct grub_freebsd_btinfo_efi_map_header *) (efi_memmap + 1);
+  grub_efi_memory_descriptor_t *efidescs = (grub_efi_memory_descriptor_t *) (efi_memmap ? efi_mmap + 1 : 0);
+
+  err = grub_efi_finish_boot_services (&efi_mmap_size_out, efidescs, NULL, &efi_desc_size, &efi_desc_version);
+  if (err)
+    return err;
+
+  if (efi_memmap)
+    {
+      /* DragonFlyBSD needs them sorted.  */
+      grub_efi_sort_memory_map(efidescs, efi_desc_size, efi_mmap_size_out);
+      /* Nowadays the tables at 0 don't contain anything important but
+	 DragonFlyBSD needs the memory at 0 for own needs.
+       */
+      if (efi_mmap_size_out >= sizeof(grub_efi_memory_descriptor_t) && efidescs->physical_start == 0
+	  && efidescs->type == GRUB_EFI_RESERVED_MEMORY_TYPE && efidescs->num_pages <= (grub_coreboot_get_zerotables_size() >> GRUB_EFI_PAGE_SHIFT))
+	{
+	  efidescs->type = GRUB_EFI_CONVENTIONAL_MEMORY;
+	}
+      grub_size_t newlen = sizeof(struct grub_freebsd_btinfo_efi_map_header) + efi_mmap_size_out;
+      grub_uint8_t *old_next_tag = ALIGN_VAR ((grub_uint8_t *) efi_mmap + efi_memmap->len - p_tag_start) + p_tag_start;
+      grub_uint8_t *new_next_tag = ALIGN_VAR ((grub_uint8_t *) efi_mmap + newlen - p_tag_start) + p_tag_start;
+      efi_memmap->len = newlen;
+      if (new_next_tag != old_next_tag)
+	grub_memmove(new_next_tag, old_next_tag, p_tag_end - old_next_tag);
+      p_tag_end += (new_next_tag - old_next_tag);
+      efi_mmap->descriptor_version = efi_desc_version;
+      efi_mmap->descriptor_size = efi_desc_size;
+      efi_mmap->memory_size = efi_mmap_size_out;
+    }
+#else
+  (void) efi_memmap;
+  (void) p_tag_end;
+#endif
 
   if (is_64bit)
     {
       struct grub_relocator64_state state = {0};
-      grub_uint8_t *pagetable;
-      grub_uint32_t *stack;
-      grub_addr_t stack_target;
+      grub_uint8_t *pagetable = p;
 
-      {
-	grub_relocator_chunk_t ch;
-	err = grub_relocator_alloc_chunk_align (relocator, &ch,
-						0x10000, 0x90000,
-						3 * sizeof (grub_uint32_t)
-						+ sizeof (bi), 4,
-						GRUB_RELOCATOR_PREFERENCE_NONE,
-						0);
-	if (err)
-	  return err;
-	stack = get_virtual_current_address (ch);
-	stack_target = get_physical_target_address (ch);
-      }
-
-#ifdef GRUB_MACHINE_EFI
-      err = grub_efi_finish_boot_services (NULL, NULL, NULL, NULL, NULL);
-      if (err)
-	return err;
-#endif
-
-      pagetable = p;
       fill_bsd64_pagetable (pagetable, (pagetable - p0) + p_target);
 
       state.cr3 = (pagetable - p0) + p_target;
@@ -768,28 +964,6 @@ grub_freebsd_boot (void)
   else
     {
       struct grub_relocator32_state state = {0};
-      grub_uint32_t *stack;
-      grub_addr_t stack_target;
-
-      {
-	grub_relocator_chunk_t ch;
-	err = grub_relocator_alloc_chunk_align (relocator, &ch,
-						0x10000, 0x90000,
-						9 * sizeof (grub_uint32_t)
-						+ sizeof (bi), 4,
-						GRUB_RELOCATOR_PREFERENCE_NONE,
-						0);
-	if (err)
-	  return err;
-	stack = get_virtual_current_address (ch);
-	stack_target = get_physical_target_address (ch);
-      }
-
-#ifdef GRUB_MACHINE_EFI
-      err = grub_efi_finish_boot_services (NULL, NULL, NULL, NULL, NULL);
-      if (err)
-	return err;
-#endif
 
       grub_memcpy (&stack[9], &bi, sizeof (bi));
       state.eip = entry;
@@ -824,6 +998,31 @@ grub_openbsd_boot (void)
   err = grub_bsd_add_mmap ();
   if (err)
     return err;
+
+#ifdef GRUB_MACHINE_EFI
+  grub_memset(&openbsd_efi_info, 0, sizeof(openbsd_efi_info));
+
+  err = grub_bsd_setup_video ();
+  if (err)
+    {
+      grub_print_error ();
+      grub_puts_ (N_("Booting in blind mode"));
+      grub_errno = GRUB_ERR_NONE;
+    }
+
+  openbsd_efi_info.config_acpi = (grub_addr_t) grub_acpi_get_rsdpv2() ?: (grub_addr_t) grub_acpi_get_rsdpv1();
+  openbsd_efi_info.config_smbios = (grub_addr_t) grub_smbios_get_eps();
+  openbsd_efi_info.system_table = (grub_addr_t) grub_efi_system_table;
+
+#ifdef __amd64__
+  openbsd_efi_info.flags |= GRUB_OPENBSD_BOOTARG_EFI_64BIT;
+#endif
+
+  err = grub_bsd_add_meta (OPENBSD_BOOTARG_EFIINFO, &openbsd_efi_info,
+			   sizeof(openbsd_efi_info));
+  if (err)
+    return err;
+#endif
 
 #ifdef GRUB_MACHINE_PCBIOS
   {
@@ -864,10 +1063,17 @@ grub_openbsd_boot (void)
   }
 
   buf_target = GRUB_BSD_TEMP_BUFFER - 9 * sizeof (grub_uint32_t);
+
+  grub_uint32_t efi_mmap_size = 0;
+
+#ifdef GRUB_MACHINE_EFI
+  efi_mmap_size = 2 * grub_efi_find_mmap_size ();
+#endif
+
   {
     grub_relocator_chunk_t ch;
     err = grub_relocator_alloc_chunk_addr (relocator, &ch, buf_target,
-					   tag_buf_len
+					   tag_buf_len + efi_mmap_size
 					   + sizeof (struct grub_openbsd_bootargs)
 					   + 9 * sizeof (grub_uint32_t));
     if (err)
@@ -876,7 +1082,10 @@ grub_openbsd_boot (void)
   }
 
   stack = (grub_uint32_t *) buf0;
-  arg0 = curarg = stack + 9;
+  void *efi_mmap_buf = stack + 9;
+  arg0 = curarg = (grub_uint8_t *) efi_mmap_buf + efi_mmap_size;
+
+  struct grub_openbsd_bootarg_efiinfo *openbsd_efi_info_ptr = 0;
 
   {
     struct bsd_tag *tag;
@@ -889,6 +1098,8 @@ grub_openbsd_boot (void)
 	head->ba_size = tag->len + sizeof (*head);
 	curarg = head + 1;
 	grub_memcpy (curarg, tag->data, tag->len);
+	if (tag->type == OPENBSD_BOOTARG_EFIINFO)
+	  openbsd_efi_info_ptr = curarg;
 	curarg = (grub_uint8_t *) curarg + tag->len;
 	head->ba_next = (grub_uint8_t *) curarg - (grub_uint8_t *) buf0
 	  + buf_target;
@@ -899,12 +1110,25 @@ grub_openbsd_boot (void)
     head->ba_next = 0;
   }
 
+#ifndef GRUB_MACHINE_EFI
   grub_video_set_mode ("text", 0, 0);
+#endif
 
 #ifdef GRUB_MACHINE_EFI
-  err = grub_efi_finish_boot_services (NULL, NULL, NULL, NULL, NULL);
+  grub_efi_uintn_t efi_mmap_size_out = efi_mmap_size;
+  grub_efi_uintn_t efi_desc_size;
+  grub_efi_uint32_t efi_desc_version;
+
+  err = grub_efi_finish_boot_services (&efi_mmap_size_out, efi_mmap_buf, NULL, &efi_desc_size, &efi_desc_version);
   if (err)
     return err;
+
+  openbsd_efi_info_ptr->mmap_desc_ver = efi_desc_version;
+  openbsd_efi_info_ptr->mmap_desc_size = efi_desc_size;
+  openbsd_efi_info_ptr->mmap_size = efi_mmap_size_out;
+  openbsd_efi_info_ptr->mmap_start = ((grub_uint8_t *) efi_mmap_buf - (grub_uint8_t *) buf0) + buf_target;
+#else
+  (void) openbsd_efi_info_ptr;
 #endif
 
   state.eip = entry;
@@ -924,12 +1148,88 @@ grub_openbsd_boot (void)
 }
 
 static grub_err_t
-grub_netbsd_setup_video (void)
+grub_netbsd_add_framebufer_info(const struct grub_video_mode_info *mode_info,
+			       void *framebuffer) {
+  struct grub_netbsd_btinfo_framebuf params = {0};
+  params.width = mode_info->width;
+  params.height = mode_info->height;
+  params.bpp = mode_info->bpp;
+  params.pitch = mode_info->pitch;
+  params.flags = 0;
+
+  params.fbaddr = (grub_addr_t) framebuffer;
+
+  params.red_mask_size = mode_info->red_mask_size;
+  params.red_field_pos = mode_info->red_field_pos;
+  params.green_mask_size = mode_info->green_mask_size;
+  params.green_field_pos = mode_info->green_field_pos;
+  params.blue_mask_size = mode_info->blue_mask_size;
+  params.blue_field_pos = mode_info->blue_field_pos;
+
+  return grub_bsd_add_meta (NETBSD_BTINFO_FRAMEBUF, &params, sizeof (params));
+}
+
+#ifdef GRUB_MACHINE_EFI
+
+static grub_err_t
+grub_openbsd_add_framebufer_info(const struct grub_video_mode_info *mode_info,
+			       void *framebuffer) {
+  openbsd_efi_info.fb_red_mask = ((1 << mode_info->red_mask_size) - 1) << mode_info->red_field_pos;
+  openbsd_efi_info.fb_green_mask = ((1 << mode_info->green_mask_size) - 1) << mode_info->green_field_pos;
+  openbsd_efi_info.fb_blue_mask = ((1 << mode_info->blue_mask_size) - 1) << mode_info->blue_field_pos;
+  openbsd_efi_info.fb_reserved_mask = ((1LL << mode_info->bpp) - 1)
+    & ~(openbsd_efi_info.fb_red_mask | openbsd_efi_info.fb_green_mask | openbsd_efi_info.fb_blue_mask);
+
+  openbsd_efi_info.fb_addr = (grub_addr_t) framebuffer;
+  openbsd_efi_info.fb_size = mode_info->height * mode_info->pitch;
+  openbsd_efi_info.fb_height = mode_info->height;
+  openbsd_efi_info.fb_width = mode_info->width;
+  openbsd_efi_info.fb_pixpsl = mode_info->pitch / (mode_info->bpp / 8);
+
+  return GRUB_ERR_NONE;
+}
+#endif
+
+static grub_err_t
+grub_freebsd_add_framebufer_info(const struct grub_video_mode_info *mode_info,
+			       void *framebuffer) {
+#ifdef GRUB_MACHINE_EFI
+  struct grub_freebsd_btinfo_efi_framebuf params = {0};
+#else
+  struct grub_freebsd_btinfo_vbe_framebuf params = {0};
+#endif
+
+  params.width = mode_info->width;
+  params.height = mode_info->height;
+
+  params.fbaddr = (grub_addr_t) framebuffer;
+  params.fbsize = mode_info->height * mode_info->pitch;
+
+  params.red_mask = ((1 << mode_info->red_mask_size) - 1) << mode_info->red_field_pos;
+  params.green_mask = ((1 << mode_info->green_mask_size) - 1) << mode_info->green_field_pos;
+  params.blue_mask = ((1 << mode_info->blue_mask_size) - 1) << mode_info->blue_field_pos;
+  params.reserved_mask = ((1LL << mode_info->bpp) - 1)
+    & ~(params.red_mask | params.green_mask | params.blue_mask);
+
+  params.pitch = mode_info->pitch / (mode_info->bpp / 8);
+
+#ifdef GRUB_MACHINE_EFI
+  return grub_bsd_add_kernel_meta (FREEBSD_MODINFO_METADATA |
+				   FREEBSD_MODINFOMD_EFI_FB, &params, sizeof (params));
+#else
+  params.bpp = mode_info->bpp;
+
+  return grub_bsd_add_kernel_meta (FREEBSD_MODINFO_METADATA |
+				   FREEBSD_MODINFOMD_VBE_FB, &params, sizeof (params));
+#endif
+}
+
+static grub_err_t
+grub_bsd_setup_video (void)
 {
   struct grub_video_mode_info mode_info;
   void *framebuffer;
   const char *modevar;
-  struct grub_netbsd_btinfo_framebuf params = {0};
   grub_err_t err;
   grub_video_driver_id_t driv_id;
 
@@ -940,14 +1240,14 @@ grub_netbsd_setup_video (void)
   if (modevar && *modevar != 0)
     {
       char *tmp;
-      tmp = grub_xasprintf ("%s;" NETBSD_DEFAULT_VIDEO_MODE, modevar);
+      tmp = grub_xasprintf ("%s;" BSD_DEFAULT_VIDEO_MODE, modevar);
       if (! tmp)
 	return grub_errno;
       err = grub_video_set_mode (tmp, 0, 0);
       grub_free (tmp);
     }
   else
-    err = grub_video_set_mode (NETBSD_DEFAULT_VIDEO_MODE, 0, 0);
+    err = grub_video_set_mode (BSD_DEFAULT_VIDEO_MODE, 0, 0);
 
   if (err)
     return err;
@@ -960,21 +1260,6 @@ grub_netbsd_setup_video (void)
 
   if (err)
     return err;
-
-  params.width = mode_info.width;
-  params.height = mode_info.height;
-  params.bpp = mode_info.bpp;
-  params.pitch = mode_info.pitch;
-  params.flags = 0;
-
-  params.fbaddr = (grub_addr_t) framebuffer;
-
-  params.red_mask_size = mode_info.red_mask_size;
-  params.red_field_pos = mode_info.red_field_pos;
-  params.green_mask_size = mode_info.green_mask_size;
-  params.green_field_pos = mode_info.green_field_pos;
-  params.blue_mask_size = mode_info.blue_mask_size;
-  params.blue_field_pos = mode_info.blue_field_pos;
 
 #ifdef GRUB_MACHINE_PCBIOS
   /* VESA packed modes may come with zeroed mask sizes, which need
@@ -996,12 +1281,20 @@ grub_netbsd_setup_video (void)
 	/* 6 is default after mode reset.  */
 	width = 6;
 
-      params.red_mask_size = params.green_mask_size
-	= params.blue_mask_size = width;
+      mode_info.red_mask_size = mode_info.green_mask_size
+	= mode_info.blue_mask_size = width;
     }
 #endif
 
-  err = grub_bsd_add_meta (NETBSD_BTINFO_FRAMEBUF, &params, sizeof (params));
+  if (kernel_type == KERNEL_TYPE_FREEBSD)
+    return grub_freebsd_add_framebufer_info(&mode_info, framebuffer);
+  else if (kernel_type == KERNEL_TYPE_NETBSD)
+    return grub_netbsd_add_framebufer_info(&mode_info, framebuffer);
+#ifdef GRUB_MACHINE_EFI
+  else if (kernel_type == KERNEL_TYPE_OPENBSD)
+    return grub_openbsd_add_framebufer_info(&mode_info, framebuffer);
+#endif
+
   return err;
 }
 
@@ -1146,7 +1439,7 @@ grub_netbsd_boot (void)
   if (err)
     return err;
 
-  err = grub_netbsd_setup_video ();
+  err = grub_bsd_setup_video ();
   if (err)
     {
       grub_print_error ();
@@ -1159,11 +1452,29 @@ grub_netbsd_boot (void)
     return err;
 
 #ifdef GRUB_MACHINE_EFI
+  struct grub_netbsd_btinfo_efi efi_info;
+  grub_memset(&efi_info, 0, sizeof(efi_info));
+  efi_info.pa_systbl = (grub_addr_t) grub_efi_system_table;
+#ifdef __i386__
+  efi_info.flags |= GRUB_NETBSD_BI_EFI_32BIT;
+#endif
   err = grub_bsd_add_meta (NETBSD_BTINFO_EFI,
-			   &grub_efi_system_table,
-			   sizeof (grub_efi_system_table));
+			   &efi_info,
+			   sizeof (efi_info));
   if (err)
     return err;
+
+  grub_uint32_t efi_mmap_size = 0;
+
+  efi_mmap_size = 2 * grub_efi_find_mmap_size ();
+
+  err = grub_bsd_add_meta (NETBSD_BTINFO_EFIMEMMAP,
+			   NULL,
+			   sizeof(struct grub_netbsd_btinfo_efimemmap)
+			   + efi_mmap_size);
+  if (err)
+    return err;
+
 #endif
 
   {
@@ -1193,6 +1504,8 @@ grub_netbsd_boot (void)
   arg0 = curarg;
   bootinfo = (void *) ((grub_uint8_t *) arg0 + tag_buf_len);
 
+  struct grub_netbsd_btinfo_common *efi_memmap = 0;
+
   {
     struct bsd_tag *tag;
     unsigned i;
@@ -1204,6 +1517,8 @@ grub_netbsd_boot (void)
 	bootinfo->bi_data[i] = ((grub_uint8_t *) curarg - (grub_uint8_t *) arg0)
 	  + arg_target;
 	head->type = tag->type;
+	if (tag->type == NETBSD_BTINFO_EFIMEMMAP)
+	  efi_memmap = head;
 	head->len = tag->len + sizeof (*head);
 	curarg = head + 1;
 	grub_memcpy (curarg, tag->data, tag->len);
@@ -1224,9 +1539,21 @@ grub_netbsd_boot (void)
   }
 
 #ifdef GRUB_MACHINE_EFI
-  err = grub_efi_finish_boot_services (NULL, NULL, NULL, NULL, NULL);
+  grub_efi_uintn_t efi_mmap_size_out = efi_mmap_size;
+  grub_efi_uintn_t efi_desc_size;
+  grub_efi_uint32_t efi_desc_version;
+  struct grub_netbsd_btinfo_efimemmap *efi_mmap = (struct grub_netbsd_btinfo_efimemmap *) (efi_memmap + 1);
+
+  err = grub_efi_finish_boot_services (&efi_mmap_size_out, efi_mmap + 1, NULL, &efi_desc_size, &efi_desc_version);
   if (err)
     return err;
+
+  efi_memmap->len = sizeof (struct grub_netbsd_btinfo_common) + sizeof(struct grub_netbsd_btinfo_efimemmap) + efi_mmap_size_out;
+  efi_mmap->version = efi_desc_version;
+  efi_mmap->size = efi_desc_size;
+  efi_mmap->num = efi_desc_size > 0 ? (efi_mmap_size_out / efi_desc_size) : 0;
+#else
+  (void) efi_memmap;
 #endif
 
   state.eip = entry;
