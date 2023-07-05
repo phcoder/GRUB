@@ -54,6 +54,7 @@
 #define FREEBSD_MODINFO_SIZE		0x0004	/* Size of module */
 #define FREEBSD_MODINFO_EMPTY		0x0005	/* Has been deleted */
 #define FREEBSD_MODINFO_ARGS		0x0006	/* Parameters string */
+#define FREEBSD_MODINFOMD_FW_HANDLE     0x000c
 #define FREEBSD_MODINFO_METADATA	0x8000	/* Module-specfic */
 
 #define FREEBSD_MODINFOMD_AOUTEXEC	0x0001	/* a.out exec header */
@@ -68,7 +69,45 @@
 #define FREEBSD_MODINFOMD_NOCOPY	0x8000	/* don't copy this metadata to the kernel */
 
 #define FREEBSD_MODINFOMD_SMAP		0x1001
+#define FREEBSD_MODINFOMD_EFI_MAP       0x1004
+#define FREEBSD_MODINFOMD_EFI_FB        0x1005
+#define	FREEBSD_MODINFOMD_VBE_FB	0x1007
 
 #define FREEBSD_MODINFOMD_DEPLIST	(0x4001 | FREEBSD_MODINFOMD_NOCOPY)  /* depends on */
+
+struct grub_freebsd_btinfo_efi_framebuf
+{
+  grub_uint64_t	fbaddr;
+  grub_uint64_t	fbsize;
+  grub_uint32_t	height;
+  grub_uint32_t	width;
+  grub_uint32_t	pitch;
+  grub_uint32_t	red_mask;
+  grub_uint32_t	green_mask;
+  grub_uint32_t	blue_mask;
+  grub_uint32_t	reserved_mask;
+};
+
+struct grub_freebsd_btinfo_vbe_framebuf
+{
+  grub_uint64_t	fbaddr;
+  grub_uint64_t	fbsize;
+  grub_uint32_t	height;
+  grub_uint32_t	width;
+  grub_uint32_t	pitch;
+  grub_uint32_t	red_mask;
+  grub_uint32_t	green_mask;
+  grub_uint32_t	blue_mask;
+  grub_uint32_t	reserved_mask;
+  grub_uint32_t	bpp;
+};
+
+struct grub_freebsd_btinfo_efi_map_header
+{
+  grub_uint64_t memory_size;
+  grub_uint64_t descriptor_size;
+  grub_uint32_t descriptor_version;
+  grub_uint32_t padding[3];
+};
 
 #endif

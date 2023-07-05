@@ -60,6 +60,7 @@
 #define NETBSD_BTINFO_FRAMEBUF		12
 #define NETBSD_BTINFO_USERCONFCOMMANDS  13
 #define NETBSD_BTINFO_EFI	        14
+#define NETBSD_BTINFO_EFIMEMMAP		15
 
 struct grub_netbsd_bootinfo
 {
@@ -150,7 +151,16 @@ struct grub_netbsd_btinfo_framebuf
 
 struct grub_netbsd_btinfo_efi
 {
-  void *pa_systbl;  /* Physical address of the EFI System Table */
+  grub_uint64_t pa_systbl;  /* Physical address of the EFI System Table */
+  grub_uint32_t flags;
+#define GRUB_NETBSD_BI_EFI_32BIT       0x1
+  grub_uint8_t reserved[12];
+};
+
+struct grub_netbsd_btinfo_efimemmap {
+  grub_uint32_t num;		/* number of memory descriptor */
+  grub_uint32_t version;	/* version of memory descriptor */
+  grub_uint32_t size;		/* size of memory descriptor */
 };
 
 #endif
