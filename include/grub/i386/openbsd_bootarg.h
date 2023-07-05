@@ -63,6 +63,30 @@
 #define	OPENBSD_BOOTARG_MMAP	0
 #define	OPENBSD_BOOTARG_PCIBIOS 4
 #define	OPENBSD_BOOTARG_CONSOLE 5
+#define	OPENBSD_BOOTARG_EFIINFO 11
+
+struct grub_openbsd_bootarg_efiinfo {
+  grub_uint64_t	config_acpi;
+  grub_uint64_t	config_smbios;
+  grub_uint64_t	fb_addr;
+  grub_uint64_t	fb_size;
+  grub_uint32_t	fb_height;
+  grub_uint32_t	fb_width;
+  grub_uint32_t	fb_pixpsl;	/* pixels per scan line */
+  grub_uint32_t	fb_red_mask;
+  grub_uint32_t	fb_green_mask;
+  grub_uint32_t	fb_blue_mask;
+  grub_uint32_t	fb_reserved_mask;
+  grub_uint32_t	flags;
+#define GRUB_OPENBSD_BOOTARG_EFI_64BIT	0x00000001	/* 64-bit EFI implementation */
+#define GRUB_OPENBSD_BOOTARG_EFI_ESRT	0x00000002	/* ESRT table */
+  grub_uint32_t	mmap_desc_ver;
+  grub_uint32_t	mmap_desc_size;
+  grub_uint32_t	mmap_size;
+  grub_uint64_t	mmap_start;
+  grub_uint64_t	system_table;
+  grub_uint64_t	config_esrt;
+} GRUB_PACKED;
 
 struct grub_openbsd_bootargs
 {
