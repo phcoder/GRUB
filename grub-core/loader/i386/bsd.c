@@ -896,7 +896,7 @@ grub_freebsd_boot (void)
 
   err = grub_relocator_alloc_chunk_align (relocator, &ch,
 					  0x10000, 0x90000,
-					  (is_64bit ? 3 : 9) * sizeof (grub_uint32_t)
+					  (is_64bit ? 4 : 9) * sizeof (grub_uint32_t)
 					  + sizeof (bi), 4,
 					  GRUB_RELOCATOR_PREFERENCE_NONE,
 					  0);
@@ -956,9 +956,10 @@ grub_freebsd_boot (void)
       state.rsp = stack_target;
       state.rip = (((grub_uint64_t) entry_hi) << 32) | entry;
 
-      stack[0] = entry;
+      stack[0] = 0;
       stack[1] = bi.tags;
       stack[2] = kern_end;
+      stack[3] = 0;
       return grub_relocator64_boot (relocator, state, 0, 0x40000000);
     }
   else
