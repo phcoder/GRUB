@@ -295,11 +295,14 @@ grub_cmd_multiboot (grub_command_t cmd __attribute__ ((unused)),
 
 #ifndef GRUB_USE_MULTIBOOT2
   grub_multiboot_quirks = GRUB_MULTIBOOT_QUIRKS_NONE;
+#endif
   int option_found = 0;
+  int no_escape = 0;
 
   do
     {
       option_found = 0;
+#ifndef GRUB_USE_MULTIBOOT2
       if (argc != 0 && grub_strcmp (argv[0], "--quirk-bad-kludge") == 0)
 	{
 	  argc--;
@@ -315,8 +318,16 @@ grub_cmd_multiboot (grub_command_t cmd __attribute__ ((unused)),
 	  option_found = 1;
 	  grub_multiboot_quirks |= GRUB_MULTIBOOT_QUIRK_MODULES_AFTER_KERNEL;
 	}
-    } while (option_found);
 #endif
+
+      if (argc != 0 && grub_strcmp (argv[0], "--noescape") == 0)
+	{
+	  argc--;
+	  argv++;
+	  option_found = 1;
+	  no_escape = 1;
+	}
+    } while (option_found);
 
   if (argc == 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
@@ -328,7 +339,7 @@ grub_cmd_multiboot (grub_command_t cmd __attribute__ ((unused)),
   grub_dl_ref (my_mod);
 
   /* Skip filename.  */
-  GRUB_MULTIBOOT (init_mbi) (argc - 1, argv + 1);
+  GRUB_MULTIBOOT (init_mbi) (argc - 1, argv + 1, no_escape);
 
   grub_relocator_unload (GRUB_MULTIBOOT (relocator));
   GRUB_MULTIBOOT (relocator) = grub_relocator_new ();
@@ -367,18 +378,29 @@ grub_cmd_module (grub_command_t cmd __attribute__ ((unused)),
   void *module = NULL;
   grub_addr_t target;
   grub_err_t err;
-  int nounzip = 0;
+  int nounzip = 0, noescape = 0, option_found = 0;
   grub_uint64_t lowest_addr = 0;
 
-  if (argc == 0)
-    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
-
-  if (grub_strcmp (argv[0], "--nounzip") == 0)
+  do
     {
-      argv++;
-      argc--;
-      nounzip = 1;
-    }
+      option_found = 0;
+
+      if (argc != 0 && grub_strcmp (argv[0], "--nounzip") == 0)
+	{
+	  argc--;
+	  argv++;
+	  option_found = 1;
+	  nounzip = 1;
+	}
+
+      if (argc != 0 && grub_strcmp (argv[0], "--noescape") == 0)
+	{
+	  argc--;
+	  argv++;
+	  option_found = 1;
+	  noescape = 1;
+	}
+    } while (option_found);
 
   if (argc == 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
@@ -420,7 +442,7 @@ grub_cmd_module (grub_command_t cmd __attribute__ ((unused)),
       target = 0;
     }
 
-  err = GRUB_MULTIBOOT (add_module) (target, size, argc - 1, argv + 1);
+  err = GRUB_MULTIBOOT (add_module) (target, size, argc - 1, argv + 1, noescape);
   if (err)
     {
       grub_file_close (file);
