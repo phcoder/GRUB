@@ -638,6 +638,14 @@ grub_cmd_xen (grub_command_t cmd __attribute__ ((unused)),
   grub_addr_t kern_start;
   grub_addr_t kern_end;
   grub_size_t sz;
+  int no_escape = 0;
+
+  if (argc != 0 && grub_strcmp (argv[0], "--noescape") == 0)
+    {
+      argc--;
+      argv++;
+      no_escape = 1;
+    }
 
   if (argc == 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
@@ -650,7 +658,7 @@ grub_cmd_xen (grub_command_t cmd __attribute__ ((unused)),
   err = grub_create_loader_cmdline (argc - 1, argv + 1,
 				    (char *) xen_state.next_start.cmd_line,
 				    sizeof (xen_state.next_start.cmd_line) - 1,
-				    GRUB_VERIFY_KERNEL_CMDLINE, 0);
+				    GRUB_VERIFY_KERNEL_CMDLINE, no_escape);
   if (err)
     return err;
 
@@ -845,17 +853,30 @@ grub_cmd_module (grub_command_t cmd __attribute__ ((unused)),
   grub_relocator_chunk_t ch;
   grub_size_t cmdline_len;
   int nounzip = 0;
+  int option_found = 0;
+  int no_escape = 0;
   grub_file_t file;
 
-  if (argc == 0)
-    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
-
-  if (grub_strcmp (argv[0], "--nounzip") == 0)
+  do
     {
-      argv++;
-      argc--;
-      nounzip = 1;
-    }
+      option_found = 0;
+
+      if (argc != 0 && grub_strcmp (argv[0], "--nounzip") == 0)
+	{
+	  argc--;
+	  argv++;
+	  option_found = 1;
+	  nounzip = 1;
+	}
+
+      if (argc != 0 && grub_strcmp (argv[0], "--noescape") == 0)
+	{
+	  argc--;
+	  argv++;
+	  option_found = 1;
+	  no_escape = 1;
+	}
+    } while (option_found);
 
   if (argc == 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
@@ -910,7 +931,7 @@ grub_cmd_module (grub_command_t cmd __attribute__ ((unused)),
     return grub_errno;
   size = grub_file_size (file);
 
-  cmdline_len = grub_loader_cmdline_size (argc - 1, argv + 1, 0);
+  cmdline_len = grub_loader_cmdline_size (argc - 1, argv + 1, no_escape);
 
   err = grub_relocator_alloc_chunk_addr (xen_state.relocator, &ch,
 					 xen_state.max_addr, cmdline_len);
@@ -919,7 +940,7 @@ grub_cmd_module (grub_command_t cmd __attribute__ ((unused)),
 
   err = grub_create_loader_cmdline (argc - 1, argv + 1,
 				    get_virtual_current_address (ch), cmdline_len,
-				    GRUB_VERIFY_MODULE_CMDLINE, 0);
+				    GRUB_VERIFY_MODULE_CMDLINE, no_escape);
   if (err)
     goto fail;
 
