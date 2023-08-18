@@ -1439,6 +1439,11 @@ module = {
 };
 
 module = {
+  name = esfs;
+  common = fs/esfs.c;
+};
+
+module = {
   name = ext2;
   common = fs/ext2.c;
 };
