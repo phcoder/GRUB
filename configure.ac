@@ -1839,15 +1839,11 @@ if test x"$starfield_excuse" = x && test x"$enable_build_grub_mkfont" = xno ; th
   starfield_excuse="No build-time grub-mkfont"
 fi
 
-AC_ARG_WITH([dejavufont],
-            AS_HELP_STRING([--with-dejavufont=FILE],
-                           [set the DejeVu source [[guessed]]]))
-
 if test "x$with_dejavufont" = x; then
   # search in well-known directories
   if test x"$starfield_excuse" = x; then
      for ext in pcf pcf.gz bdf bdf.gz ttf ttf.gz; do
-       for dir in . /usr/src /usr/share/fonts/X11/misc /usr/share/fonts/truetype/ttf-dejavu /usr/share/fonts/dejavu /usr/share/fonts/truetype /usr/pkg/share/fonts/X11/TTF /usr/local/share/fonts/dejavu /usr/X11R6/lib/X11/fonts/TTF; do
+       for dir in . /usr/src /usr/share/fonts/X11/misc /usr/share/fonts/truetype/ttf-dejavu /usr/share/fonts/dejavu /usr/share/fonts/truetype /usr/pkg/share/fonts/X11/TTF /usr/local/share/fonts/dejavu /usr/X11R6/lib/X11/fonts/TTF /usr/share/fonts/truetype/dejavu; do
           if test -f "$dir/DejaVuSans.$ext"; then
             DJVU_FONT_SOURCE="$dir/DejaVuSans.$ext"
             break 2
