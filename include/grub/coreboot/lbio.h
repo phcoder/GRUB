@@ -71,7 +71,9 @@ enum
     GRUB_LINUXBIOS_MEMBER_LINK        = 0x11,
     GRUB_LINUXBIOS_MEMBER_FRAMEBUFFER = 0x12,
     GRUB_LINUXBIOS_MEMBER_TIMESTAMPS  = 0x16,
-    GRUB_LINUXBIOS_MEMBER_CBMEMC      = 0x17
+    GRUB_LINUXBIOS_MEMBER_CBMEMC      = 0x17,
+    GRUB_LINUXBIOS_MEMBER_SPI_FLASH   = 0x29,
+    GRUB_LINUXBIOS_MEMBER_BOOT_MEDIA  = 0x30,
   };
 
 struct grub_linuxbios_table_framebuffer {
@@ -99,6 +101,27 @@ struct grub_linuxbios_mem_region
   grub_uint32_t type;
 } GRUB_PACKED;
 typedef struct grub_linuxbios_mem_region *mem_region_t;
+
+struct grub_linuxbios_flash_mmap_window {
+  grub_uint32_t flash_base;
+  grub_uint32_t host_base;
+  grub_uint32_t size;
+} GRUB_PACKED;
+
+struct grub_linuxbios_table_spi_flash {
+  grub_uint32_t flash_size;
+  grub_uint32_t sector_size;
+  grub_uint32_t erase_cmd;
+  grub_uint32_t mmap_count;
+  struct grub_linuxbios_flash_mmap_window mmap_table[0];
+} GRUB_PACKED;
+
+struct grub_linuxbios_table_boot_media {
+  grub_uint64_t fmap_offset;
+  grub_uint64_t cbfs_offset;
+  grub_uint64_t cbfs_size;
+  grub_uint64_t boot_media_size;
+} GRUB_PACKED;
 
 grub_err_t
 EXPORT_FUNC(grub_linuxbios_table_iterate) (int (*hook) (grub_linuxbios_table_item_t,
