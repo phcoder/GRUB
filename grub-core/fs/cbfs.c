@@ -26,6 +26,7 @@
 #include <grub/dl.h>
 #include <grub/i18n.h>
 #include <grub/cbfs_core.h>
+#include <grub/coreboot/lbio.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -273,7 +274,8 @@ grub_cbfs_close (grub_file_t file)
 #if (defined (__i386__) || defined (__x86_64__)) && !defined (GRUB_UTIL) \
   && !defined (GRUB_MACHINE_EMU) && !defined (GRUB_MACHINE_XEN)
 
-static char *cbfsdisk_addr;
+static struct grub_linuxbios_flash_mmap_window *cbfsdisk_map;
+static grub_uint32_t cbfsdisk_map_size;
 static grub_off_t cbfsdisk_size = 0;
 
 static int
@@ -289,10 +291,10 @@ grub_cbfsdisk_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data,
 static grub_err_t
 grub_cbfsdisk_open (const char *name, grub_disk_t disk)
 {
-  if (grub_strcmp (name, "cbfsdisk"))
+  if (grub_strcmp (name, "cbfsdisk") && cbfsdisk_size > 0)
       return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not a cbfsdisk");
 
-  disk->total_sectors = cbfsdisk_size / GRUB_DISK_SECTOR_SIZE;
+  disk->total_sectors = cbfsdisk_size >> GRUB_DISK_SECTOR_BITS;
   disk->max_agglomerate = GRUB_DISK_MAX_MAX_AGGLOMERATE;
   disk->id = 0;
 
@@ -307,10 +309,40 @@ grub_cbfsdisk_close (grub_disk_t disk __attribute((unused)))
 static grub_err_t
 grub_cbfsdisk_read (grub_disk_t disk __attribute((unused)),
 		    grub_disk_addr_t sector,
-		    grub_size_t size, char *buf)
+		    grub_size_t size_sectors, char *buf)
 {
-  grub_memcpy (buf, cbfsdisk_addr + (sector << GRUB_DISK_SECTOR_BITS),
-	       size << GRUB_DISK_SECTOR_BITS);
+  grub_off_t off = sector << GRUB_DISK_SECTOR_BITS;
+  grub_size_t size = size_sectors << GRUB_DISK_SECTOR_BITS;
+  while (size > 0)
+    {
+      unsigned int i;
+      grub_size_t to_read;
+      grub_off_t reg_offset;
+      for (i = 0; i < cbfsdisk_map_size; i++)
+	if (cbfsdisk_map[i].flash_base <= off && off < cbfsdisk_map[i].flash_base + cbfsdisk_map[i].size)
+	  break;
+      if (i == cbfsdisk_map_size)
+	{
+	  grub_off_t next = -1;
+	  for (i = 0; i < cbfsdisk_map_size; i++)
+	    if (cbfsdisk_map[i].flash_base > off && next > cbfsdisk_map[i].flash_base)
+	      next = cbfsdisk_map[i].flash_base;
+	  to_read = grub_min (size, next - off);
+	  grub_memset (buf, 0xff, to_read);
+	  grub_dprintf("cbfs", "Filling 0x%x bytes\n", (unsigned) to_read);
+	  buf += to_read;
+	  size -= to_read;
+	  off += to_read;
+	  continue;
+      }
+      reg_offset = off - cbfsdisk_map[i].flash_base;
+      to_read = grub_min (size, cbfsdisk_map[i].size - reg_offset);
+      grub_memcpy (buf, (void *) (grub_addr_t) (cbfsdisk_map[i].host_base + reg_offset), to_read);
+      grub_dprintf("cbfs", "Copying %p,0x%x bytes\n", (void *) (grub_addr_t) (cbfsdisk_map[i].host_base + reg_offset), (unsigned) to_read);
+      buf += to_read;
+      size -= to_read;
+      off += to_read;
+    }
   return 0;
 }
 
@@ -336,29 +368,80 @@ static struct grub_disk_dev grub_cbfsdisk_dev =
     .next = 0
   };
 
+struct cbtable_iter_ctxt {
+  int has_coreboot;
+  struct grub_linuxbios_table_spi_flash *spi;
+  struct grub_linuxbios_table_boot_media *boot_media;
+};
+
+static int cbtable_iter (grub_linuxbios_table_item_t item,
+			 void *ctxt_in)
+{
+  struct cbtable_iter_ctxt *ctxt = ctxt_in;
+
+  ctxt->has_coreboot = 1;
+
+  if (item->tag == GRUB_LINUXBIOS_MEMBER_SPI_FLASH)
+    ctxt->spi = (void *) (item + 1);
+
+  if (item->tag == GRUB_LINUXBIOS_MEMBER_BOOT_MEDIA)
+    ctxt->boot_media = (void *) (item + 1);
+
+  return 0;
+}
+
 static void
 init_cbfsdisk (void)
 {
-  grub_uint32_t ptr;
-  struct cbfs_header *head;
+  struct cbtable_iter_ctxt ctxt = {
+    0, 0, 0
+  };
 
-  ptr = *((grub_uint32_t *) grub_absolute_pointer (0xfffffffc));
-  head = (struct cbfs_header *) (grub_addr_t) ptr;
-  grub_dprintf ("cbfs", "head=%p\n", head);
+  grub_linuxbios_table_iterate (cbtable_iter, &ctxt);
 
-  /* coreboot current supports only ROMs <= 16 MiB. Bigger ROMs will
-     have problems as RCBA is 18 MiB below end of 32-bit typically,
-     so either memory map would have to be rearranged or we'd need to support
-     reading ROMs through controller directly.
-   */
-  if (ptr < 0xff000000
-      || 0xffffffff - ptr < (grub_uint32_t) sizeof (*head) + 0xf
-      || !validate_head (head))
+  if (!ctxt.has_coreboot)
     return;
 
-  cbfsdisk_size = ALIGN_UP (grub_be_to_cpu32 (head->romsize),
-			    GRUB_DISK_SECTOR_SIZE);
-  cbfsdisk_addr = (void *) (grub_addr_t) (0x100000000ULL - cbfsdisk_size);
+  if (ctxt.spi)
+    {
+      cbfsdisk_map = ctxt.spi->mmap_table;
+      cbfsdisk_map_size = ctxt.spi->mmap_count;
+      cbfsdisk_size = ctxt.spi->flash_size;
+    }
+  else
+    {
+      if (ctxt.boot_media)
+	cbfsdisk_size = ALIGN_UP (grub_be_to_cpu32 (ctxt.boot_media->boot_media_size),
+				  GRUB_DISK_SECTOR_SIZE);
+      else
+	{
+	  grub_uint32_t ptr;
+	  struct cbfs_header *head;
+
+	  ptr = *((grub_uint32_t *) grub_absolute_pointer (0xfffffffc));
+	  head = (struct cbfs_header *) (grub_addr_t) ptr;
+	  grub_dprintf ("cbfs", "head=%p\n", head);
+
+	  /* coreboot current supports only ROMs <= 16 MiB. Bigger ROMs will
+	     have problems as RCBA is 18 MiB below end of 32-bit typically,
+	     so either memory map would have to be rearranged or we'd need to support
+	     reading ROMs through controller directly.
+	  */
+	  if (ptr < 0xff000000
+	      || 0xffffffff - ptr < (grub_uint32_t) sizeof (*head) + 0xf
+	      || !validate_head (head))
+	    return;
+
+	  cbfsdisk_size = ALIGN_UP (grub_be_to_cpu32 (head->romsize),
+				    GRUB_DISK_SECTOR_SIZE);
+	}
+      cbfsdisk_map_size = 1;
+      static struct grub_linuxbios_flash_mmap_window singleton;
+      singleton.flash_base = 0;
+      singleton.host_base = 0x100000000ULL - cbfsdisk_size;
+      singleton.size = cbfsdisk_size;
+      cbfsdisk_map = &singleton;
+  }
 
   grub_disk_dev_register (&grub_cbfsdisk_dev);
 }
