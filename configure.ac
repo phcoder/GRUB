@@ -1361,7 +1361,10 @@ grub_CHECK_NO_PIE_ONEWORD
 grub_CHECK_LINK_PIE
 [# Need that, because some distributions ship compilers that include
 # `-fPIE' or '-fpie' and '-pie' in the default specs.
-if [ x"$pie_possible" = xyes ]; then
+if [ "x$target_cpu" = xriscv64 ]; then
+  TARGET_CFLAGS="$TARGET_CFLAGS -fPIE -fpie -fPIC"
+  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fPIE -fpie -fPIC"
+elif [ x"$pie_possible" = xyes ]; then
   TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIE -fno-pie"
   TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fno-PIE -fno-pie"
 fi
@@ -1390,7 +1393,7 @@ grub_CHECK_PIC
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if ( test x$target_cpu = xmips || test x$target_cpu = xmipsel || test x$target_cpu = xarm64 ) && test "x$grub_cv_cc_target_clang" = xyes ; then
+if ( test x$target_cpu = xmips || test x$target_cpu = xmipsel || test x$target_cpu = xarm64 ) && test "x$grub_cv_cc_target_clang" = xyes || test x$target_cpu = xriscv64; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 elif [ x"$pic_possible" = xyes ]; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
