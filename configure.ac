@@ -539,12 +539,12 @@ if test "x$target_alias" != x && test "x$host_alias" != "x$target_alias"; then
   tmp_ac_tool_prefix="$ac_tool_prefix"
   ac_tool_prefix=$target_alias-
 
-  AC_CHECK_TOOLS(TARGET_CC, [gcc egcs cc],
+  AC_CHECK_TOOLS(TARGET_CC, [${TARGET_CROSS}gcc ${TARGET_CROSS}egcs ${TARGET_CROSS}cc],
                  [AC_MSG_ERROR([none of gcc, egcs and cc is found. set TARGET_CC manually.])])
-  AC_CHECK_TOOL(TARGET_OBJCOPY, objcopy)
-  AC_CHECK_TOOL(TARGET_STRIP, strip)
-  AC_CHECK_TOOL(TARGET_NM, nm)
-  AC_CHECK_TOOL(TARGET_RANLIB, ranlib)
+  AC_CHECK_TOOL(TARGET_OBJCOPY, ${TARGET_CROSS}objcopy)
+  AC_CHECK_TOOL(TARGET_STRIP, ${TARGET_CROSS}strip)
+  AC_CHECK_TOOL(TARGET_NM, ${TARGET_CROSS}nm)
+  AC_CHECK_TOOL(TARGET_RANLIB, ${TARGET_CROSS}ranlib)
 
   ac_tool_prefix="$tmp_ac_tool_prefix"
 else
