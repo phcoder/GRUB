@@ -114,6 +114,8 @@ is_relocatable (const struct grub_install_image_target_desc *image_target)
     || (image_target->id == IMAGE_COREBOOT && image_target->elf_target == EM_ARM);
 }
 
+#include "../grub-core/kern/riscv/dl_helper.c"
+
 #ifdef MKIMAGE_ELF32
 
 /*
@@ -790,6 +792,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 #define MASK19 ((1 << 19) - 1)
 #else
   grub_uint32_t *tr = (void *) (pe_target + tramp_off);
+  grub_uint32_t *gpptr = (void *) (pe_target + got_off);
 #endif
 
   for (i = 0, s = smd->sections;
@@ -828,6 +831,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 	r_size = grub_target_to_host (s->sh_entsize);
 	rtab_offset = grub_target_to_host (s->sh_offset);
 	num_rs = rtab_size / r_size;
+	grub_uint64_t *got_offsets = xmalloc (num_rs * sizeof(got_offsets[0]));
 
 	for (j = 0, r = (Elf_Rela *) ((char *) e + rtab_offset);
 	     j < num_rs;
@@ -1401,6 +1405,17 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 						     | imm5 | imm4 | imm3_1);
 		     }
 		     break;
+		   case R_RISCV_GOT_HI20:
+		     {
+		       grub_int32_t got_offset, hi20;
+		       *gpptr = grub_host_to_target64 (sym_addr);
+		       got_offset = got_offsets[j] = (char *)gpptr - (char *)target;
+		       hi20 = (got_offset + 0x800) & 0xfffff000;
+		       *t32 = grub_host_to_target32 ((grub_target_to_host32 (*t32) & 0xfff) | hi20);
+		       gpptr++;
+		     }
+		     break;
+
 		   case R_RISCV_PCREL_HI20:
 		     {
 		       grub_int32_t hi20;
@@ -1432,6 +1447,23 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 			   rel2_offset = grub_target_to_host (rel2->r_offset);
 			   rel2_info = grub_target_to_host (rel2->r_info);
 			   rel2_loc = target_section_addr + rel2_offset + image_target->vaddr_offset;
+
+			   if (ELF_R_TYPE (rel2_info) == R_RISCV_GOT_HI20
+			       && rel2_loc == sym_addr)
+			     {
+			       rel2_off = got_offsets[k];
+			       off = rel2_off - ((rel2_off + 0x800) & 0xfffff000);
+
+			       if (ELF_R_TYPE (info) == R_RISCV_PCREL_LO12_I)
+				 *t32 = grub_host_to_target32 ((grub_target_to_host32 (*t32) & 0xfffff) | (off & 0xfff) << 20);
+			       else
+				 {
+				   grub_uint32_t imm11_5 = (off & 0xfe0) << (31 - 11);
+				   grub_uint32_t imm4_0 = (off & 0x1f) << (11 - 4);
+				   *t32 = grub_host_to_target32 ((grub_target_to_host32 (*t32) & 0x1fff07f) | imm11_5 | imm4_0);
+				 }
+			       break;
+			     }
 
 			   if (ELF_R_TYPE (rel2_info) == R_RISCV_PCREL_HI20
 			       && rel2_loc == sym_addr)
@@ -1490,6 +1522,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 				image_target->elf_target);
 	     }
 	  }
+	free (got_offsets);
       }
 }
 
@@ -1861,6 +1894,7 @@ translate_relocation_pe (struct translate_context *ctx,
 	case R_RISCV_RVC_JUMP:
 	case R_RISCV_ADD32:
 	case R_RISCV_SUB32:
+	case R_RISCV_GOT_HI20:
 	  grub_util_info ("  %s:  not adding fixup: 0x%08x : 0x%08x", __FUNCTION__, (unsigned int) addr, (unsigned int) ctx->current_address);
 	  break;
 	case R_RISCV_HI20:
@@ -2081,6 +2115,21 @@ create_u64_fixups (struct translate_context *ctx,
 					    image_target);
 }
 
+static void
+create_u32_fixups (struct translate_context *ctx,
+		   Elf_Addr jumpers, grub_size_t njumpers,
+		   const struct grub_install_image_target_desc *image_target)
+{
+  unsigned i;
+  assert (image_target->id == IMAGE_EFI);
+  for (i = 0; i < njumpers; i++)
+    ctx->current_address = add_fixup_entry (&ctx->lst,
+					    GRUB_PE32_REL_BASED_HIGHLOW,
+					    jumpers + 4 * i,
+					    0, ctx->current_address,
+					    image_target);
+}
+
 /* Make a .reloc section.  */
 static void
 make_reloc_section (Elf_Ehdr *e, struct grub_mkimage_layout *layout,
@@ -2144,11 +2193,18 @@ make_reloc_section (Elf_Ehdr *e, struct grub_mkimage_layout *layout,
 		       + image_target->vaddr_offset,
 		       2 * layout->ia64jmpnum,
 		       image_target);
-  if (image_target->elf_target == EM_IA_64 || image_target->elf_target == EM_AARCH64)
+  if (image_target->elf_target == EM_IA_64 || image_target->elf_target == EM_AARCH64 || (image_target->elf_target == EM_RISCV && image_target->voidp_sizeof == 8))
     create_u64_fixups (&ctx,
 		       layout->got_off
 		       + image_target->vaddr_offset,
 		       (layout->got_size / 8),
+		       image_target);
+
+  if (image_target->elf_target == EM_RISCV && image_target->voidp_sizeof == 4)
+    create_u32_fixups (&ctx,
+		       layout->got_off
+		       + image_target->vaddr_offset,
+		       (layout->got_size / 4),
 		       image_target);
 
   finish_reloc_translation (&ctx, layout, image_target);
@@ -2505,6 +2561,19 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 	  layout->got_off = layout->kernel_size;
 	  layout->kernel_size += ALIGN_UP (layout->got_size, 16);
 	}
+      if (image_target->elf_target == EM_RISCV)
+	{
+	  grub_size_t tramp;
+
+	  layout->kernel_size = ALIGN_UP (layout->kernel_size, 16);
+
+	  grub_riscv64_dl_get_tramp_got_size (e, &tramp, &layout->got_size);
+
+	  layout->tramp_off = layout->kernel_size;
+	  layout->kernel_size += ALIGN_UP (tramp, 16);
+	  layout->got_off = layout->kernel_size;
+	  layout->kernel_size += ALIGN_UP (layout->got_size, 16);
+	}
       if (image_target->elf_target == EM_AARCH64)
 	{
 	  grub_size_t tramp;
@@ -2513,6 +2582,20 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 
 	  grub_arm64_dl_get_tramp_got_size (e, &tramp, &layout->got_size);
 
+	  layout->got_off = layout->kernel_size;
+	  layout->kernel_size += ALIGN_UP (layout->got_size, 16);
+	}
+#else
+      if (image_target->elf_target == EM_RISCV)
+	{
+	  grub_size_t tramp;
+
+	  layout->kernel_size = ALIGN_UP (layout->kernel_size, 16);
+
+	  grub_riscv32_dl_get_tramp_got_size (e, &tramp, &layout->got_size);
+
+	  layout->tramp_off = layout->kernel_size;
+	  layout->kernel_size += ALIGN_UP (tramp, 16);
 	  layout->got_off = layout->kernel_size;
 	  layout->kernel_size += ALIGN_UP (layout->got_size, 16);
 	}

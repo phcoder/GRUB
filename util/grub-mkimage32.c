@@ -17,6 +17,9 @@
 # define ELF_R_SYM(val)		ELF32_R_SYM(val)
 # define ELF_R_TYPE(val)		ELF32_R_TYPE(val)
 # define ELF_ST_TYPE(val)		ELF32_ST_TYPE(val)
+# define grub_riscvXX_dl_get_tramp_got_size grub_riscv32_dl_get_tramp_got_size
+# define grub_le_to_cpuXX grub_le_to_cpu32
+# define grub_target_addr_t grub_uint32_t
 
 #define XEN_NOTE_SIZE		132
 #define XEN_PVH_NOTE_SIZE	20

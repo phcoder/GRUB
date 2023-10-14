@@ -51,25 +51,66 @@ grub_arch_dl_check_header (void *ehdr)
 
 #pragma GCC diagnostic ignored "-Wcast-align"
 
+#define grub_riscvXX_dl_get_tramp_got_size grub_arch_dl_get_tramp_got_size
+#define grub_le_to_cpuXX(x) (x)
+#define grub_target_addr_t grub_addr_t
+#include "dl_helper.c"
+
+static grub_err_t
+make_jump_offset(grub_dl_t mod, grub_addr_t target, grub_addr_t place, int num_bits, grub_int32_t *out)
+{
+  grub_ssize_t off = target - place;
+
+  if (off < (1LL << (num_bits - 1)) && off >= -(1LL << (num_bits - 1))) {
+    *out = off;
+    return GRUB_ERR_NONE;
+  }
+
+  struct trampoline *tptr = mod->trampptr;
+  off = (grub_addr_t) tptr - place;
+
+  if (!(off < (1LL << (num_bits - 1)) && off >= -(1LL << (num_bits - 1))))
+    return grub_error (GRUB_ERR_BAD_MODULE, "relocation overflow");
+
+  mod->trampptr = tptr + 1;
+
+  *out = off;
+
+  grub_memcpy (tptr, &trampoline_template,
+	       sizeof (*tptr));
+  tptr->call_address = target;
+
+  return GRUB_ERR_NONE;
+}
+
 /* Relocate symbols. */
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 			       Elf_Shdr *s, grub_dl_segment_t seg)
 {
   Elf_Rel *rel, *max;
+  grub_addr_t *got_values = NULL, relctr = 0;
+  grub_size_t rel_ctr = (s->sh_size + s->sh_entsize - 1) / s->sh_entsize;
 
-  for (rel = (Elf_Rel *) ((char *) ehdr + s->sh_offset),
+  got_values = grub_malloc (rel_ctr * sizeof(got_values[0]));
+  if (!got_values)
+    return grub_errno;
+
+  for (relctr = 0, rel = (Elf_Rel *) ((char *) ehdr + s->sh_offset),
 	 max = (Elf_Rel *) ((char *) rel + s->sh_size);
        rel < max;
-       rel = (Elf_Rel *) ((char *) rel + s->sh_entsize))
+       rel = (Elf_Rel *) ((char *) rel + s->sh_entsize), relctr++)
     {
       Elf_Sym *sym;
       void *place;
       grub_size_t sym_addr;
 
       if (rel->r_offset >= seg->size)
-	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+	{
+	  grub_free (got_values);
+	  return grub_error (GRUB_ERR_BAD_MODULE,
+			     "reloc offset is out of the segment");
+	}
 
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
@@ -164,7 +205,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	case R_RISCV_BRANCH:
 	  {
 	    grub_uint32_t *abs_place = place;
-	    grub_ssize_t off = sym_addr - (grub_addr_t) place;
+	    grub_int32_t off;
+	    if (make_jump_offset(mod, sym_addr, (grub_addr_t) place, 13, &off))
+	      {
+		grub_free (got_values);
+		return grub_errno;
+	      }
 	    grub_uint32_t imm12 = (off & 0x1000) << (31 - 12);
 	    grub_uint32_t imm11 = (off & 0x800) >> (11 - 7);
 	    grub_uint32_t imm10_5 = (off & 0x7e0) << (30 - 10);
@@ -177,7 +223,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	case R_RISCV_JAL:
 	  {
 	    grub_uint32_t *abs_place = place;
-	    grub_ssize_t off = sym_addr - (grub_addr_t) place;
+	    grub_int32_t off;
+	    if (make_jump_offset(mod, sym_addr, (grub_addr_t) place, 21, &off))
+	      {
+		grub_free (got_values);
+		return grub_errno;
+	      }
 	    grub_uint32_t imm20 = (off & 0x100000) << (31 - 20);
 	    grub_uint32_t imm19_12 = (off & 0xff000);
 	    grub_uint32_t imm11 = (off & 0x800) << (20 - 11);
@@ -191,11 +242,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	case R_RISCV_CALL_PLT:
 	  {
 	    grub_uint32_t *abs_place = place;
-	    grub_ssize_t off = sym_addr - (grub_addr_t) place;
+	    grub_int32_t off;
 	    grub_uint32_t hi20, lo12;
-
-	    if (off != (grub_int32_t) off)
-	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation overflow");
+	    if (make_jump_offset(mod, sym_addr, (grub_addr_t) place, 32, &off))
+	      {
+		grub_free (got_values);
+		return grub_errno;
+	      }
 
 	    hi20 = (off + 0x800) & 0xfffff000;
 	    lo12 = (off - hi20) & 0xfff;
@@ -243,7 +296,32 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	    grub_int32_t hi20;
 
 	    if (off != (grub_int32_t)off)
-	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation overflow");
+	      {
+		grub_free (got_values);
+		return grub_error (GRUB_ERR_BAD_MODULE, "relocation overflow");
+	      }
+
+	    hi20 = (off + 0x800) & 0xfffff000;
+	    *abs_place = (*abs_place & 0xfff) | hi20;
+	  }
+	break;
+
+	case R_RISCV_GOT_HI20:
+	  {
+	    grub_uint32_t *abs_place = place;
+	    grub_addr_t *gpptr = mod->gotptr;
+	    grub_ssize_t off = (grub_addr_t)gpptr - (grub_addr_t) place;
+	    grub_int32_t hi20;
+
+	    *gpptr = sym_addr;
+	    got_values[relctr] = (grub_addr_t) gpptr;
+	    mod->gotptr = gpptr + 1;
+
+	    if (off != (grub_int32_t)off)
+	      {
+		grub_free (got_values);
+		return grub_error (GRUB_ERR_BAD_MODULE, "relocation overflow");
+	      }
 
 	    hi20 = (off + 0x800) & 0xfffff000;
 	    *abs_place = (*abs_place & 0xfff) | hi20;
@@ -255,10 +333,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	  {
 	    grub_uint32_t *t32 = place;
 	    Elf_Rela *rel2;
+	    int rel2ctr;
 	    /* Search backwards for matching HI20 reloc.  */
-	    for (rel2 = (Elf_Rela *) ((char *) rel - s->sh_entsize);
+	    for (rel2 = (Elf_Rela *) ((char *) rel - s->sh_entsize), rel2ctr = relctr - 1;
 		    (unsigned long)rel2 >= ((unsigned long)ehdr + s->sh_offset);
-		    rel2 = (Elf_Rela *) ((char *) rel2 - s->sh_entsize))
+		 rel2 = (Elf_Rela *) ((char *) rel2 - s->sh_entsize), rel2ctr--)
 	      {
 		Elf_Addr rel2_info;
 		Elf_Addr rel2_offset;
@@ -271,6 +350,24 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 		rel2_offset = rel2->r_offset;
 		rel2_info = rel2->r_info;
 		rel2_loc = (grub_addr_t) seg->addr + rel2_offset;
+
+		if (ELF_R_TYPE (rel2_info) == R_RISCV_GOT_HI20
+		    && rel2_loc == sym_addr)
+		  {
+		    rel2_sym_addr = got_values[rel2ctr];
+		    rel2_off = rel2_sym_addr - rel2_loc;
+		    off = rel2_off - ((rel2_off + 0x800) & 0xfffff000);
+
+		    if (ELF_R_TYPE (rel->r_info) == R_RISCV_PCREL_LO12_I)
+		      *t32 = (*t32 & 0xfffff) | (off & 0xfff) << 20;
+		    else
+		      {
+			grub_uint32_t imm11_5 = (off & 0xfe0) << (31 - 11);
+			grub_uint32_t imm4_0 = (off & 0x1f) << (11 - 4);
+			*t32 = (*t32 & 0x1fff07f) | imm11_5 | imm4_0;
+		      }
+		    break;
+		  }
 
 		if (ELF_R_TYPE (rel2_info) == R_RISCV_PCREL_HI20
 		    && rel2_loc == sym_addr)
@@ -296,7 +393,10 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 		  }
 	      }
 	    if ((unsigned long)rel2 < ((unsigned long)ehdr + s->sh_offset))
-	      return grub_error (GRUB_ERR_BAD_MODULE, "cannot find matching HI20 relocation");
+	      {
+		grub_free (got_values);
+		return grub_error (GRUB_ERR_BAD_MODULE, "cannot find matching HI20 relocation");
+	      }
 	  }
 	  break;
 
@@ -336,11 +436,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
 	    grub_snprintf (rel_info, sizeof (rel_info) - 1, "%" PRIxGRUB_UINT64_T,
 			   (grub_uint64_t) ELF_R_TYPE (rel->r_info));
+	    grub_free (got_values);
 	    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
 			       N_("relocation 0x%s is not implemented yet"), rel_info);
 	  }
 	}
     }
 
+  grub_free (got_values);
   return GRUB_ERR_NONE;
 }
