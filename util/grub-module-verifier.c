@@ -181,31 +181,36 @@ struct grub_module_verifier_arch archs[] = {
       -1
     } },
   { "riscv64", 8, 0, EM_RISCV, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
-      R_RISCV_32,
+      /* R_RISCV_32, */ /* Has too little range */
       R_RISCV_64,
-      R_RISCV_ADD8,
-      R_RISCV_ADD16,
-      R_RISCV_ADD32,
       R_RISCV_ADD64,
-      R_RISCV_SUB8,
-      R_RISCV_SUB16,
-      R_RISCV_SUB32,
       R_RISCV_SUB64,
       R_RISCV_ALIGN,
       R_RISCV_BRANCH,
       R_RISCV_CALL,
       R_RISCV_CALL_PLT,
       R_RISCV_GOT_HI20,
-      R_RISCV_HI20,
+      /* R_RISCV_HI20, */ /* Has too little range */
       R_RISCV_JAL,
-      R_RISCV_LO12_I,
-      R_RISCV_LO12_S,
-      R_RISCV_PCREL_HI20,
-      R_RISCV_PCREL_LO12_I,
-      R_RISCV_PCREL_LO12_S,
+      /* R_RISCV_LO12_I, */ /* Has too little range */
+      /* R_RISCV_LO12_S, */ /* Has too little range */
       R_RISCV_RELAX,
       R_RISCV_RVC_BRANCH,
       R_RISCV_RVC_JUMP,
+      -1
+    }, (int[]){
+      R_RISCV_PCREL_HI20,
+      R_RISCV_PCREL_LO12_I,
+      R_RISCV_PCREL_LO12_S,
+      /* ADD/SUB are fine as fine as they both refer to local symbol and occur in pairs.
+	 TODO: Check that they're in pairs
+       */
+      R_RISCV_ADD8,
+      R_RISCV_SUB8,
+      R_RISCV_ADD16,
+      R_RISCV_SUB16,
+      R_RISCV_ADD32,
+      R_RISCV_SUB32,
       -1
     }
   },
