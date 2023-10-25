@@ -2022,6 +2022,13 @@ module = {
 };
 
 module = {
+  name = part_fmap;
+  common = partmap/fmap.c;
+  enable = x86;
+  enable = coreboot;
+};
+
+module = {
   name = part_gpt;
   common = partmap/gpt.c;
 };
