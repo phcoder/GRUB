@@ -55,6 +55,9 @@ END {
     for (depmod in uniqmods) {
       delete uniqmods[depmod];
     }
+    if (mod == "bli") {
+	uniqmods["part_gpt"] = 1;
+    }
     for (i in depmods) {
       depmod = depmods[i];
       # Ignore kernel, as always loaded.
