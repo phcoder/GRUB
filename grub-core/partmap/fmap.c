@@ -124,15 +124,15 @@ grub_fmap_partition_map_iterate (grub_disk_t disk,
 
   current_offset = header_offset + sizeof(header);
 
-  for (i = 0; i < grub_be_to_cpu16 (header.nareas); i++)
+  for (i = 0; i < grub_le_to_cpu16 (header.nareas); i++)
     {
       if (grub_disk_read (disk, current_offset >> GRUB_DISK_SECTOR_BITS, current_offset & (GRUB_DISK_SECTOR_SIZE - 1),
 			  sizeof (entry), &entry))
 	return grub_errno;
 
       /* TODO: What to do if it's not 512-bytes aligned?  */
-      grub_uint64_t end = (grub_uint64_t) grub_be_to_cpu32 (entry.offset) + (grub_uint64_t) grub_be_to_cpu32 (entry.size);
-      part.start = grub_be_to_cpu32 (entry.offset) >> GRUB_DISK_SECTOR_BITS;
+      grub_uint64_t end = (grub_uint64_t) grub_le_to_cpu32 (entry.offset) + (grub_uint64_t) grub_le_to_cpu32 (entry.size);
+      part.start = grub_le_to_cpu32 (entry.offset) >> GRUB_DISK_SECTOR_BITS;
       part.len = (end >> GRUB_DISK_SECTOR_BITS) - part.start;
       part.offset = current_offset >> GRUB_DISK_SECTOR_BITS;
       part.number = i;
@@ -141,8 +141,8 @@ grub_fmap_partition_map_iterate (grub_disk_t disk,
       part.parent = disk->partition;
 
       grub_dprintf ("gpt", "FMAP entry %d: start=0x%llx, length=0x%llx\n", i,
-		    (unsigned long long) grub_be_to_cpu32 (entry.offset),
-		    (unsigned long long) grub_be_to_cpu32 (entry.size));
+		    (unsigned long long) grub_le_to_cpu32 (entry.offset),
+		    (unsigned long long) grub_le_to_cpu32 (entry.size));
 
       if (hook (disk, &part, hook_data))
 	return grub_errno;
