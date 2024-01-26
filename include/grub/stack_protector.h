@@ -25,6 +25,8 @@
 #ifdef GRUB_STACK_PROTECTOR
 extern grub_addr_t EXPORT_VAR (__stack_chk_guard);
 extern void __attribute__ ((noreturn)) EXPORT_FUNC (__stack_chk_fail) (void);
+extern grub_addr_t EXPORT_VAR (_stack_chk_guard);
+extern void __attribute__ ((noreturn)) EXPORT_FUNC (_stack_chk_fail) (void);
 #endif
 
 #endif /* GRUB_STACK_PROTECTOR_H */

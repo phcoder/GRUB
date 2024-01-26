@@ -47,6 +47,7 @@ static grub_efi_uint8_t stack_chk_guard_buf[32];
 
 /* Initialize canary in case there is no RNG protocol. */
 grub_addr_t __stack_chk_guard = (grub_addr_t) GRUB_STACK_PROTECTOR_INIT;
+grub_addr_t _stack_chk_guard = (grub_addr_t) GRUB_STACK_PROTECTOR_INIT;
 
 void __attribute__ ((noreturn))
 __stack_chk_fail (void)
@@ -77,6 +78,12 @@ __stack_chk_fail (void)
   while (1);
 }
 
+void __attribute__ ((noreturn))
+_stack_chk_fail (void)
+{
+  __stack_chk_fail ();
+}
+
 static void
 stack_protector_init (void)
 {
@@ -90,8 +97,10 @@ stack_protector_init (void)
 
       status = rng->get_rng (rng, NULL, sizeof (stack_chk_guard_buf),
 			     stack_chk_guard_buf);
-      if (status == GRUB_EFI_SUCCESS)
+      if (status == GRUB_EFI_SUCCESS) {
 	grub_memcpy (&__stack_chk_guard, stack_chk_guard_buf, sizeof (__stack_chk_guard));
+	grub_memcpy (&_stack_chk_guard, stack_chk_guard_buf, sizeof (_stack_chk_guard));
+      }
     }
 }
 #else
