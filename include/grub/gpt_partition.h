@@ -41,6 +41,13 @@
 	{ 0x85, 0xD2, 0xE1, 0xE9, 0x04, 0x34, 0xCF, 0xB3 }	\
   }
 
+#define GRUB_GPT_PARTITION_TYPE_OPENBSD_DISKLABEL \
+  { grub_cpu_to_le32_compile_time (0x824CC7A0U),\
+      grub_cpu_to_le16_compile_time (0x36A8), \
+      grub_cpu_to_le16_compile_time (0x11E3),	       \
+	{ 0x89, 0x0A, 0x95, 0x25, 0x19, 0xAD, 0x3F, 0x61 }	\
+  }
+
 struct grub_gpt_header
 {
   grub_uint8_t magic[8];
