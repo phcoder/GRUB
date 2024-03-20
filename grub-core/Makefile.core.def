@@ -968,12 +968,12 @@ module = {
   common = commands/hashsum.c;
 };
 
-module = {
+/*module = {
   name = pgp;
   common = commands/pgp.c;
   cflags = '$(CFLAGS_POSIX)';
   cppflags = '-I$(srcdir)/lib/posix_wrap';
-};
+};*/
 
 module = {
   name = hdparm;

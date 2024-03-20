@@ -132,6 +132,10 @@ for cipher_file in cipher_files:
     if re.match ("(kdf\.c|scrypt\.c)$", cipher_file):
         chlog = "%s%s: Removed\n" % (chlog, chlognew)
         continue
+    # TODO: Support chacha20 and poly1305
+    if cipher_file in ["chacha20.c", "dsa.c", "ecc.c", "elgamal.c", "rsa.c"]:
+        chlog = "%s%s: Removed\n" % (chlog, chlognew)
+        continue        
     # TODO: Use optimized versions
     if re.match ("(.*\.[sS]|.*-intel-shaext\.c|.*-ssse3-i386\.c|.*-ppc\.c|.*-ssse3-amd64\.c|.*-s390x\.c|rijndael-aesni\.c|crc-intel-pclmul\.c|.*-armv8-ce\.c|.*-p10le\.c|rijndael-padlock.c|rijndael-ppc9le.c|rijndael-vaes.c)$", cipher_file):
         chlog = "%s%s: Removed\n" % (chlog, chlognew)
