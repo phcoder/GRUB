@@ -65,7 +65,11 @@ typedef enum
     GPG_ERR_WRONG_PUBKEY_ALGO,
     GPG_ERR_OUT_OF_MEMORY,
     GPG_ERR_TOO_LARGE,
-    GPG_ERR_ENOMEM
+    GPG_ERR_ENOMEM,
+    GPG_ERR_CHECKSUM,
+    GPG_ERR_INV_LENGTH,
+    GPG_ERR_VALUE_NOT_FOUND,
+    GPG_ERR_ERANGE,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
@@ -84,37 +88,60 @@ enum gcry_cipher_modes
   };
 #endif
 
+/* Extra algo IDs not coming from gcrypt.  */
+#define GCRY_MD_ADLER32 10301
+#define GCRY_MD_CRC64 10302
+
 /* Don't rely on this. Check!  */
 #define GRUB_CRYPTO_MAX_MDLEN 64
 #define GRUB_CRYPTO_MAX_CIPHER_BLOCKSIZE 16
 #define GRUB_CRYPTO_MAX_MD_CONTEXT_SIZE 256
 
 /* Type for the cipher_setkey function.  */
+struct cipher_bulk_ops;
+
 typedef gcry_err_code_t (*gcry_cipher_setkey_t) (void *c,
 						 const unsigned char *key,
-						 unsigned keylen);
+						 unsigned keylen,
+						 struct cipher_bulk_ops *bulk_ops);
 
 /* Type for the cipher_encrypt function.  */
-typedef void (*gcry_cipher_encrypt_t) (void *c,
-				       unsigned char *outbuf,
-				       const unsigned char *inbuf);
+typedef unsigned int (*gcry_cipher_encrypt_t) (void *c,
+					       unsigned char *outbuf,
+					       const unsigned char *inbuf);
 
 /* Type for the cipher_decrypt function.  */
-typedef void (*gcry_cipher_decrypt_t) (void *c,
-				       unsigned char *outbuf,
-				       const unsigned char *inbuf);
+typedef unsigned int (*gcry_cipher_decrypt_t) (void *c,
+					       unsigned char *outbuf,
+					       const unsigned char *inbuf);
 
 /* Type for the cipher_stencrypt function.  */
 typedef void (*gcry_cipher_stencrypt_t) (void *c,
 					 unsigned char *outbuf,
 					 const unsigned char *inbuf,
-					 unsigned int n);
+					 grub_size_t n);
 
 /* Type for the cipher_stdecrypt function.  */
 typedef void (*gcry_cipher_stdecrypt_t) (void *c,
 					 unsigned char *outbuf,
 					 const unsigned char *inbuf,
-					 unsigned int n);
+					 grub_size_t n);
+
+typedef void (*selftest_report_func_t)(const char *domain,
+                                       int algo,
+                                       const char *what,
+                                       const char *errdesc);
+
+/* The type used to convey additional information to a cipher.  */
+typedef gpg_err_code_t (*gcry_cipher_set_extra_info_t)
+     (void *c, int what, const void *buffer, grub_size_t buflen);
+
+/* The type used to set an IV directly in the algorithm module.  */
+typedef void (*gcry_cipher_setiv_func_t)(void *c, const grub_uint8_t *iv, grub_size_t ivlen);
+
+/* Definition of the selftest functions.  */
+typedef gpg_err_code_t (*gcry_selftest_func_t)
+     (int algo, int extended, selftest_report_func_t report);
 
 typedef struct gcry_cipher_oid_spec
 {
@@ -125,9 +152,14 @@ typedef struct gcry_cipher_oid_spec
 /* Module specification structure for ciphers.  */
 typedef struct gcry_cipher_spec
 {
+  int algo;
+  struct {
+    unsigned int disabled:1;
+    unsigned int fips:1;
+  } flags;
   const char *name;
   const char **aliases;
-  gcry_cipher_oid_spec_t *oids;
+  const gcry_cipher_oid_spec_t *oids;
   grub_size_t blocksize;
   grub_size_t keylen;
   grub_size_t contextsize;
@@ -136,6 +168,10 @@ typedef struct gcry_cipher_spec
   gcry_cipher_decrypt_t decrypt;
   gcry_cipher_stencrypt_t stencrypt;
   gcry_cipher_stdecrypt_t stdecrypt;
+  gcry_selftest_func_t selftest;
+  gcry_cipher_set_extra_info_t set_extra_info;
+  gcry_cipher_setiv_func_t setiv;
+
 #ifdef GRUB_UTIL
   const char *modname;
 #endif
@@ -143,7 +179,7 @@ typedef struct gcry_cipher_spec
 } gcry_cipher_spec_t;
 
 /* Type for the md_init function.  */
-typedef void (*gcry_md_init_t) (void *c);
+typedef void (*gcry_md_init_t) (void *c, unsigned int flags);
 
 /* Type for the md_write function.  */
 typedef void (*gcry_md_write_t) (void *c, const void *buf, grub_size_t nbytes);
@@ -162,16 +198,24 @@ typedef struct gcry_md_oid_spec
 /* Module specification structure for message digests.  */
 typedef struct gcry_md_spec
 {
+  int algo;
+  struct {
+    unsigned int disabled:1;
+    unsigned int fips:1;
+  } flags;
   const char *name;
-  unsigned char *asnoid;
+  const unsigned char *asnoid;
   int asnlen;
-  gcry_md_oid_spec_t *oids;
+  const gcry_md_oid_spec_t *oids;
   grub_size_t mdlen;
   gcry_md_init_t init;
   gcry_md_write_t write;
   gcry_md_final_t final;
   gcry_md_read_t read;
+  void *extract;
+  void *hash_buffers;
   grub_size_t contextsize; /* allocate this amount of context */
+
   /* Block size, needed for HMAC.  */
   grub_size_t blocksize;
 #ifdef GRUB_UTIL
@@ -183,47 +227,38 @@ typedef struct gcry_md_spec
 struct gcry_mpi;
 typedef struct gcry_mpi *gcry_mpi_t;
 
+struct gcry_sexp;
+typedef struct gcry_sexp *gcry_sexp_t;
+
 /* Type for the pk_generate function.  */
-typedef gcry_err_code_t (*gcry_pk_generate_t) (int algo,
-					       unsigned int nbits,
-					       unsigned long use_e,
-					       gcry_mpi_t *skey,
-					       gcry_mpi_t **retfactors);
+typedef gcry_err_code_t (*gcry_pk_generate_t) (gcry_sexp_t genparms,
+                                               gcry_sexp_t *r_skey);
 
 /* Type for the pk_check_secret_key function.  */
-typedef gcry_err_code_t (*gcry_pk_check_secret_key_t) (int algo,
-						       gcry_mpi_t *skey);
+typedef gcry_err_code_t (*gcry_pk_check_secret_key_t) (gcry_sexp_t keyparms);
 
 /* Type for the pk_encrypt function.  */
-typedef gcry_err_code_t (*gcry_pk_encrypt_t) (int algo,
-					      gcry_mpi_t *resarr,
-					      gcry_mpi_t data,
-					      gcry_mpi_t *pkey,
-					      int flags);
+typedef gcry_err_code_t (*gcry_pk_encrypt_t) (gcry_sexp_t *r_ciph,
+                                              gcry_sexp_t s_data,
+                                              gcry_sexp_t keyparms);
 
 /* Type for the pk_decrypt function.  */
-typedef gcry_err_code_t (*gcry_pk_decrypt_t) (int algo,
-					      gcry_mpi_t *result,
-					      gcry_mpi_t *data,
-					      gcry_mpi_t *skey,
-					      int flags);
+typedef gcry_err_code_t (*gcry_pk_decrypt_t) (gcry_sexp_t *r_plain,
+                                              gcry_sexp_t s_data,
+                                              gcry_sexp_t keyparms);
 
 /* Type for the pk_sign function.  */
-typedef gcry_err_code_t (*gcry_pk_sign_t) (int algo,
-					   gcry_mpi_t *resarr,
-					   gcry_mpi_t data,
-					   gcry_mpi_t *skey);
+typedef gcry_err_code_t (*gcry_pk_sign_t) (gcry_sexp_t *r_sig,
+                                           gcry_sexp_t s_data,
+                                           gcry_sexp_t keyparms);
 
 /* Type for the pk_verify function.  */
-typedef gcry_err_code_t (*gcry_pk_verify_t) (int algo,
-					     gcry_mpi_t hash,
-					     gcry_mpi_t *data,
-					     gcry_mpi_t *pkey,
-					     int (*cmp) (void *, gcry_mpi_t),
-					     void *opaquev);
+typedef gcry_err_code_t (*gcry_pk_verify_t) (gcry_sexp_t s_sig,
+                                             gcry_sexp_t s_data,
+                                             gcry_sexp_t keyparms);
 
 /* Type for the pk_get_nbits function.  */
-typedef unsigned (*gcry_pk_get_nbits_t) (int algo, gcry_mpi_t *pkey);
+typedef unsigned (*gcry_pk_get_nbits_t) (gcry_sexp_t keyparms);
 
 /* Module specification structure for message digests.  */
 typedef struct gcry_pk_spec
@@ -408,7 +443,35 @@ void _gcry_assert_failed (const char *expr, const char *file, int line,
 
 void _gcry_burn_stack (int bytes);
 void _gcry_log_error( const char *fmt, ... )  __attribute__ ((format (__printf__, 1, 2)));
+void _gcry_log_info (const char *fmt, ...);
+void __gcry_burn_stack (unsigned int size);
+void __gcry_burn_stack_dummy (void);
+void _gcry_bug( const char *file, int line, const char *func );
+void
+_gcry_fast_wipememory (void *ptr, grub_size_t len);
+void
+_gcry_fast_wipememory2 (void *ptr, int set, grub_size_t len);
+unsigned int
+_gcry_ct_memequal (const void *b1, const void *b2, grub_size_t len);
+unsigned int
+_gcry_ct_not_memequal (const void *b1, const void *b2, grub_size_t len);
 
+
+static inline unsigned int _gcry_get_hw_features(void)
+{
+  return 0;
+}
+
+void *_gcry_malloc(grub_size_t n);
+void *_gcry_malloc_secure(grub_size_t n);
+void *_gcry_xmalloc(grub_size_t n);
+void *_gcry_xmalloc_secure(grub_size_t n);
+void _gcry_free (void *p);
+void *_gcry_xrealloc (void *a, grub_size_t n);
+int _gcry_is_secure (const void *a);
+void *_gcry_xcalloc (grub_size_t n, grub_size_t m);
+void *_gcry_xcalloc_secure (grub_size_t n, grub_size_t m);
+void _gcry_divide_by_zero (void);
 
 #ifdef GRUB_UTIL
 void grub_gcry_init_all (void);
