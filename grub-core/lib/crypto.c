@@ -247,7 +247,9 @@ grub_crypto_cipher_set_key (grub_crypto_cipher_handle_t cipher,
 			    const unsigned char *key,
 			    unsigned keylen)
 {
-  return cipher->cipher->setkey (cipher->ctx, key, keylen, NULL);
+  /* TODO: Fix this. It's ugly as hell.  */
+  void *bulk_ops[100];
+  return cipher->cipher->setkey (cipher->ctx, key, keylen, (void *) bulk_ops);
 }
 
 gcry_err_code_t
