@@ -23,10 +23,11 @@
 
 void _gcry_secmem_init (size_t npool);
 void _gcry_secmem_term (void);
-void *_gcry_secmem_malloc (size_t size) _GCRY_GCC_ATTR_MALLOC;
-void *_gcry_secmem_realloc (void *a, size_t newsize);
-void _gcry_secmem_free (void *a);
-void _gcry_secmem_dump_stats (void);
+void *_gcry_secmem_malloc (size_t size, int xhint) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_secmem_realloc (void *a, size_t newsize, int xhint);
+int  _gcry_secmem_free (void *a);
+void _gcry_secmem_dump_stats (int extended);
+void _gcry_secmem_set_auto_expand (unsigned int chunksize);
 void _gcry_secmem_set_flags (unsigned flags);
 unsigned _gcry_secmem_get_flags(void);
 int _gcry_private_is_secure (const void *p);
@@ -35,5 +36,7 @@ int _gcry_private_is_secure (const void *p);
 #define GCRY_SECMEM_FLAG_NO_WARNING      (1 << 0)
 #define GCRY_SECMEM_FLAG_SUSPEND_WARNING (1 << 1)
 #define GCRY_SECMEM_FLAG_NOT_LOCKED      (1 << 2)
+#define GCRY_SECMEM_FLAG_NO_MLOCK        (1 << 3)
+#define GCRY_SECMEM_FLAG_NO_PRIV_DROP    (1 << 4)
 
 #endif /* G10_SECMEM_H */

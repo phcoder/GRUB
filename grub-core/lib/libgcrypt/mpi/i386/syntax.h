@@ -1,6 +1,6 @@
 /* syntax.h -- Definitions for x86 syntax variations.
  *
- *       Copyright (C) 1992, 1994, 1995, 1998,
+ *       Copyright (C) 1992, 1994, 1995, 1998, 
  *                     2001, 2002 Free Software Foundation, Inc.
  *
  * This file is part of Libgcrypt.
@@ -25,6 +25,32 @@
  *	 of an optional secure memory allocation which may be used
  *	 to avoid revealing of sensitive data due to paging etc.
  */
+
+#include <config.h>
+
+#ifdef __i386__
+#ifdef HAVE_GCC_ASM_CFI_DIRECTIVES
+# define CFI_STARTPROC()            .cfi_startproc
+# define CFI_ENDPROC()              .cfi_endproc
+# define CFI_ADJUST_CFA_OFFSET(off) .cfi_adjust_cfa_offset off
+# define CFI_REL_OFFSET(reg,off)    .cfi_rel_offset reg, off
+# define CFI_RESTORE(reg)           .cfi_restore reg
+
+# define CFI_PUSH(reg) \
+	CFI_ADJUST_CFA_OFFSET(4); CFI_REL_OFFSET(reg, 0)
+# define CFI_POP(reg) \
+	CFI_ADJUST_CFA_OFFSET(-4); CFI_RESTORE(reg)
+#else
+# define CFI_STARTPROC()
+# define CFI_ENDPROC()
+# define CFI_ADJUST_CFA_OFFSET(off)
+# define CFI_REL_OFFSET(reg,off)
+# define CFI_RESTORE(reg)
+
+# define CFI_PUSH(reg)
+# define CFI_POP(reg)
+#endif
+#endif
 
 #undef ALIGN
 
@@ -66,3 +92,7 @@
 #undef ALIGN
 #define ALIGN(log) .align log,0x90
 #endif
+
+/* 'ret' instruction replacement for straight-line speculation mitigation */
+#define ret_spec_stop \
+	ret; int3;
