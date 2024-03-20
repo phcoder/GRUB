@@ -35,6 +35,7 @@ ${PYTHON} util/import_unicode.py unicode/UnicodeData.txt unicode/BidiMirroring.t
 echo "Importing libgcrypt..."
 ${PYTHON} util/import_gcry.py grub-core/lib/libgcrypt/ grub-core
 sed -n -f util/import_gcrypth.sed < grub-core/lib/libgcrypt/src/gcrypt.h.in > include/grub/gcrypt/gcrypt.h
+sed -n -f util/import_gcrypt_inth.sed < grub-core/lib/libgcrypt/src/gcrypt-int.h >> include/grub/gcrypt/gcrypt.h
 if [ -f include/grub/gcrypt/g10lib.h ]; then
     rm include/grub/gcrypt/g10lib.h
 fi
