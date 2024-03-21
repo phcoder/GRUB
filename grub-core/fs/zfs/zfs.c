@@ -57,6 +57,8 @@
 #include <grub/i18n.h>
 #include <grub/safemath.h>
 
+#include <zstd.h>
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define	ZPOOL_PROP_BOOTFS		"bootfs"
@@ -222,6 +224,7 @@ struct grub_zfs_device_desc
 struct subvolume
 {
   dnode_end_t mdn;
+  int have_mdn;
   grub_uint64_t obj;
   grub_uint64_t case_insensitive;
   grub_size_t nkeys;
@@ -291,6 +294,10 @@ static const char *spa_feature_names[] = {
   "com.delphix:embedded_data",
   "com.delphix:extensible_dataset",
   "org.open-zfs:large_blocks",
+  "com.klarasystems:vdev_zaps_v2",
+  "com.delphix:head_errlog",
+  "org.freebsd:zstd_compress",
+  "com.datto:encryption",
   NULL
 };
 
@@ -310,6 +317,29 @@ zlib_decompress (void *s, void *d,
     grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
 		"premature end of compressed");
   return grub_errno;
+}
+
+static grub_err_t
+zstd_decompress (void *ibuf, void *obuf, grub_size_t isize,
+		 grub_size_t osize)
+{
+  grub_size_t zstd_ret;
+  grub_uint8_t *byte_buf = (grub_uint8_t *) ibuf;
+
+  if (isize < 8)
+      return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "zstd data too short");
+
+  /* Fix magic number.  */
+  byte_buf[4] = 0x28;
+  byte_buf[5] = 0xb5;
+  byte_buf[6] = 0x2f;
+  byte_buf[7] = 0xfd;
+  zstd_ret = ZSTD_decompress (obuf, osize, byte_buf + 4, isize - 4);
+
+  if (ZSTD_isError (zstd_ret))
+      return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "zstd data corrupted");
+
+  return GRUB_ERR_NONE;
 }
 
 static grub_err_t
@@ -362,6 +392,7 @@ static decomp_entry_t decomp_table[ZIO_COMPRESS_FUNCTIONS] = {
   {"gzip-9", zlib_decompress},  /* ZIO_COMPRESS_GZIP9 */
   {"zle", zle_decompress},      /* ZIO_COMPRESS_ZLE   */
   {"lz4", lz4_decompress},      /* ZIO_COMPRESS_LZ4   */
+  {"zstd", zstd_decompress},    /* ZIO_COMPRESS_ZSTD   */
 };
 
 static grub_err_t zio_read_data (blkptr_t * bp, grub_zfs_endian_t endian,
@@ -2760,9 +2791,12 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 		   &(dnode_path->dn), data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (dn_new);
       return err;
     }
+
+  subvol->have_mdn = 1;
 
   err = zap_lookup (&(dnode_path->dn), ZPL_VERSION_STR, &version,
 		    data, 0);
@@ -2797,9 +2831,11 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
   err = dnode_get (&subvol->mdn, objnum, 0, &(dnode_path->dn), data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (dn_new);
       return err;
     }
+  subvol->have_mdn = 1;
 
   path = path_buf = grub_strdup (path_in);
   if (!path_buf)
@@ -2864,8 +2900,11 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 
       objnum = ZFS_DIRENT_OBJ (objnum);
       err = dnode_get (&subvol->mdn, objnum, 0, &(dnode_path->dn), data);
-      if (err)
+      if (err) {
+	subvol->have_mdn = 0;
 	break;
+      }
+      subvol->have_mdn = 1;
 
       *path = ch;
       if (dnode_path->dn.dn.dn_bonustype == DMU_OT_ZNODE
@@ -3312,10 +3351,12 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
   err = dnode_get (&(data->mos), headobj, 0, &subvol->mdn, data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (fsname);
       grub_free (snapname);
       return err;
     }
+  subvol->have_mdn = 1;
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
   keychainobj = grub_zfs_to_cpu64 (((dsl_dir_phys_t *) DN_BONUS (&dn->dn))->keychain, dn->endian);
@@ -3397,7 +3438,12 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
 
   subvol->obj = headobj;
 
-  make_mdn (&subvol->mdn, data);
+  err = make_mdn (&subvol->mdn, data);
+  /* Allow mdn to be missing if it's an encrypted set and we don't have the key.  */
+  if (err) {
+    grub_memset(&subvol->mdn, 0, sizeof(subvol->mdn));
+    grub_errno = GRUB_ERR_NONE;
+  }
 
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
@@ -4030,8 +4076,11 @@ fill_fs_info (struct grub_dirhook_info *info,
 	}
     }
   err = make_mdn (&mdn, data);
-  if (err)
-    return err;
+  /* Allow mdn to be missing if it's an encrypted set and we don't have the key.  */
+  if (err) {
+    grub_errno = GRUB_ERR_NONE;
+    return GRUB_ERR_NONE;
+  }
   err = dnode_get (&mdn, MASTER_NODE_OBJ, DMU_OT_MASTER_NODE,
 		   &dn, data);
   if (err)
