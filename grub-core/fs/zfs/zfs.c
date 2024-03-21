@@ -3348,22 +3348,15 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
 
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
-  if (!subvol->have_mdn)
-    {
-      grub_free (fsname);
-      grub_free (snapname);
-      if (*isfs)
-	return GRUB_ERR_NONE;
-      return grub_error(GRUB_ERR_BAD_FS, "MDN is unavailable");
-    }
-
   err = dnode_get (&(data->mos), headobj, 0, &subvol->mdn, data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (fsname);
       grub_free (snapname);
       return err;
     }
+  subvol->have_mdn = 1;
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
   keychainobj = grub_zfs_to_cpu64 (((dsl_dir_phys_t *) DN_BONUS (&dn->dn))->keychain, dn->endian);
