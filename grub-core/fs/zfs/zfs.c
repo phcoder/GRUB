@@ -224,6 +224,7 @@ struct grub_zfs_device_desc
 struct subvolume
 {
   dnode_end_t mdn;
+  int have_mdn;
   grub_uint64_t obj;
   grub_uint64_t case_insensitive;
   grub_size_t nkeys;
@@ -2790,9 +2791,12 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 		   &(dnode_path->dn), data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (dn_new);
       return err;
     }
+
+  subvol->have_mdn = 1;
 
   err = zap_lookup (&(dnode_path->dn), ZPL_VERSION_STR, &version,
 		    data, 0);
@@ -2827,9 +2831,11 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
   err = dnode_get (&subvol->mdn, objnum, 0, &(dnode_path->dn), data);
   if (err)
     {
+      subvol->have_mdn = 0;
       grub_free (dn_new);
       return err;
     }
+  subvol->have_mdn = 1;
 
   path = path_buf = grub_strdup (path_in);
   if (!path_buf)
@@ -2894,8 +2900,11 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 
       objnum = ZFS_DIRENT_OBJ (objnum);
       err = dnode_get (&subvol->mdn, objnum, 0, &(dnode_path->dn), data);
-      if (err)
+      if (err) {
+	subvol->have_mdn = 0;
 	break;
+      }
+      subvol->have_mdn = 1;
 
       *path = ch;
       if (dnode_path->dn.dn.dn_bonustype == DMU_OT_ZNODE
@@ -3338,6 +3347,15 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
   headobj = grub_zfs_to_cpu64 (((dsl_dir_phys_t *) DN_BONUS (&dn->dn))->dd_head_dataset_obj, dn->endian);
 
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
+
+  if (!subvol->have_mdn)
+    {
+      grub_free (fsname);
+      grub_free (snapname);
+      if (*isfs)
+	return GRUB_ERR_NONE;
+      return grub_error(GRUB_ERR_BAD_FS, "MDN is unavailable");
+    }
 
   err = dnode_get (&(data->mos), headobj, 0, &subvol->mdn, data);
   if (err)
