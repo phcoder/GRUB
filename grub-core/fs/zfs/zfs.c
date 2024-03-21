@@ -296,6 +296,7 @@ static const char *spa_feature_names[] = {
   "com.klarasystems:vdev_zaps_v2",
   "com.delphix:head_errlog",
   "org.freebsd:zstd_compress",
+  "com.datto:encryption",
   NULL
 };
 
@@ -3426,7 +3427,12 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
 
   subvol->obj = headobj;
 
-  make_mdn (&subvol->mdn, data);
+  err = make_mdn (&subvol->mdn, data);
+  /* Allow mdn to be missing if it's an encrypted set and we don't have the key.  */
+  if (err) {
+    grub_memset(&subvol->mdn, 0, sizeof(subvol->mdn));
+    grub_errno = GRUB_ERR_NONE;
+  }
 
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
@@ -4059,8 +4065,11 @@ fill_fs_info (struct grub_dirhook_info *info,
 	}
     }
   err = make_mdn (&mdn, data);
-  if (err)
-    return err;
+  /* Allow mdn to be missing if it's an encrypted set and we don't have the key.  */
+  if (err) {
+    grub_errno = GRUB_ERR_NONE;
+    return GRUB_ERR_NONE;
+  }
   err = dnode_get (&mdn, MASTER_NODE_OBJ, DMU_OT_MASTER_NODE,
 		   &dn, data);
   if (err)
