@@ -35,7 +35,7 @@
 #undef __GNU_LIBRARY__
 #define __GNU_LIBRARY__ 1
 
-#define U64_C(c) (c ## ULL)
+#define UINT64_C(c) (c ## ULL)
 
 #define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
 

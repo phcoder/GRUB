@@ -972,12 +972,12 @@ module = {
   common = commands/hashsum.c;
 };
 
-module = {
+/*module = {
   name = pgp;
   common = commands/pgp.c;
   cflags = '$(CFLAGS_POSIX)';
   cppflags = '-I$(srcdir)/lib/posix_wrap';
-};
+};*/
 
 module = {
   name = hdparm;
@@ -2536,6 +2536,8 @@ module = {
   common = lib/libgcrypt-grub/mpi/mpicoder.c;
   common = lib/libgcrypt-grub/mpi/mpih-rshift.c;
   common = lib/libgcrypt-grub/mpi/mpi-inline.c;
+  common = lib/libgcrypt-grub/mpi/mpih-const-time.c;
+  common = lib/libgcrypt-grub/mpi/mpi-scan.c;
   common = lib/libgcrypt_wrap/mem.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';

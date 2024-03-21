@@ -138,3 +138,9 @@ gpg_error_from_syserror (void)
       return GPG_ERR_GENERAL;
     }
 }
+
+gcry_err_code_t
+gpg_err_code_from_syserror (void)
+{
+  return gpg_error_from_syserror ();
+}
