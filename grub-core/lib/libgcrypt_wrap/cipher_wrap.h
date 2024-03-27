@@ -37,8 +37,6 @@
 
 #define UINT64_C(c) (c ## ULL)
 
-#define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
-
 #define CIPHER_INFO_NO_WEAK_KEY    1
 
 #define HAVE_U64_TYPEDEF 1
@@ -73,5 +71,7 @@ _gcry_fips_mode (void)
 #include <grub/gcrypt/gcrypt.h>
 
 #define gcry_mpi_mod _gcry_mpi_mod
+
+#define gpg_strerror gcry_strerror
 
 #endif

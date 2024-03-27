@@ -70,6 +70,7 @@ typedef enum
     GPG_ERR_INV_LENGTH,
     GPG_ERR_VALUE_NOT_FOUND,
     GPG_ERR_ERANGE,
+    GPG_ERR_INV_DATA,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
@@ -224,11 +225,72 @@ typedef struct gcry_md_spec
   struct gcry_md_spec *next;
 } gcry_md_spec_t;
 
+typedef struct gcry_md_handle*gcry_md_hd_t;
+
 struct gcry_mpi;
 typedef struct gcry_mpi *gcry_mpi_t;
 
 struct gcry_sexp;
 typedef struct gcry_sexp *gcry_sexp_t;
+
+
+#define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
+#define PUBKEY_FLAG_RFC6979        (1 << 1)
+#define PUBKEY_FLAG_FIXEDLEN       (1 << 2)
+#define PUBKEY_FLAG_LEGACYRESULT   (1 << 3)
+#define PUBKEY_FLAG_RAW_FLAG       (1 << 4)
+#define PUBKEY_FLAG_TRANSIENT_KEY  (1 << 5)
+#define PUBKEY_FLAG_USE_X931       (1 << 6)
+#define PUBKEY_FLAG_USE_FIPS186    (1 << 7)
+#define PUBKEY_FLAG_USE_FIPS186_2  (1 << 8)
+#define PUBKEY_FLAG_PARAM          (1 << 9)
+#define PUBKEY_FLAG_COMP           (1 << 10)
+#define PUBKEY_FLAG_NOCOMP         (1 << 11)
+#define PUBKEY_FLAG_EDDSA          (1 << 12)
+#define PUBKEY_FLAG_GOST           (1 << 13)
+#define PUBKEY_FLAG_NO_KEYTEST     (1 << 14)
+#define PUBKEY_FLAG_DJB_TWEAK      (1 << 15)
+#define PUBKEY_FLAG_SM2            (1 << 16)
+#define PUBKEY_FLAG_PREHASH        (1 << 17)
+
+enum pk_operation
+  {
+    PUBKEY_OP_ENCRYPT,
+    PUBKEY_OP_DECRYPT,
+    PUBKEY_OP_SIGN,
+    PUBKEY_OP_VERIFY
+  };
+
+enum pk_encoding
+  {
+    PUBKEY_ENC_RAW,
+    PUBKEY_ENC_PKCS1,
+    PUBKEY_ENC_PKCS1_RAW,
+    PUBKEY_ENC_OAEP,
+    PUBKEY_ENC_PSS,
+    PUBKEY_ENC_UNKNOWN
+  };
+
+struct pk_encoding_ctx
+{
+  enum pk_operation op;
+  unsigned int nbits;
+
+  enum pk_encoding encoding;
+  int flags;
+
+  int hash_algo;
+
+  /* for OAEP */
+  unsigned char *label;
+  grub_size_t labellen;
+
+  /* for PSS */
+  grub_size_t saltlen;
+
+  int (* verify_cmp) (void *opaque, gcry_mpi_t tmp);
+  void *verify_arg;
+};
 
 /* Type for the pk_generate function.  */
 typedef gcry_err_code_t (*gcry_pk_generate_t) (gcry_sexp_t genparms,
@@ -260,9 +322,26 @@ typedef gcry_err_code_t (*gcry_pk_verify_t) (gcry_sexp_t s_sig,
 /* Type for the pk_get_nbits function.  */
 typedef unsigned (*gcry_pk_get_nbits_t) (gcry_sexp_t keyparms);
 
+/* The type used to compute the keygrip.  */
+typedef gpg_err_code_t (*pk_comp_keygrip_t) (gcry_md_hd_t md,
+                                             gcry_sexp_t keyparm);
+
+/* The type used to query an ECC curve name.  */
+typedef const char *(*pk_get_curve_t)(gcry_sexp_t keyparms, int iterator,
+                                      unsigned int *r_nbits);
+
+/* The type used to query ECC curve parameters by name.  */
+typedef gcry_sexp_t (*pk_get_curve_param_t)(const char *name);
+
 /* Module specification structure for message digests.  */
 typedef struct gcry_pk_spec
 {
+  int algo;
+  struct {
+    unsigned int disabled:1;
+    unsigned int fips:1;
+  } flags;
+  int use;
   const char *name;
   const char **aliases;
   const char *elements_pkey;
@@ -270,7 +349,6 @@ typedef struct gcry_pk_spec
   const char *elements_enc;
   const char *elements_sig;
   const char *elements_grip;
-  int use;
   gcry_pk_generate_t generate;
   gcry_pk_check_secret_key_t check_secret_key;
   gcry_pk_encrypt_t encrypt;
@@ -278,6 +356,10 @@ typedef struct gcry_pk_spec
   gcry_pk_sign_t sign;
   gcry_pk_verify_t verify;
   gcry_pk_get_nbits_t get_nbits;
+  pk_comp_keygrip_t comp_keygrip;
+  pk_get_curve_t get_curve;
+  pk_get_curve_param_t get_curve_param;
+
 #ifdef GRUB_UTIL
   const char *modname;
 #endif
