@@ -234,6 +234,10 @@ struct subvolume
     grub_uint64_t txg;
     grub_uint64_t algo;
   } *keyring;
+
+  struct grub_zfs_datto_key key_datto;
+
+  int is_datto_encrypted;
 };
 
 struct grub_zfs_data
@@ -272,16 +276,21 @@ struct grub_zfs_dir_ctx
   struct grub_zfs_data *data;
 };
 
-grub_err_t (*grub_zfs_decrypt) (grub_crypto_cipher_handle_t cipher,
-				grub_uint64_t algo,
-				void *nonce,
-				char *buf, grub_size_t size,
-				const grub_uint32_t *expected_mac,
-				grub_zfs_endian_t endian) = NULL;
-grub_crypto_cipher_handle_t (*grub_zfs_load_key) (const struct grub_zfs_key *key,
-						  grub_size_t keysize,
-						  grub_uint64_t salt,
-						  grub_uint64_t algo) = NULL;
+struct grub_zfs_decryptor *grub_zfs_decrypt = NULL;
+
+struct grub_zfs_crypt_datto_data
+{
+  grub_uint8_t *iv;
+  grub_size_t ivlen;
+  grub_uint8_t *mac;
+  grub_size_t maclen;
+  grub_uint8_t *master;
+  grub_size_t masterlen;
+  grub_uint8_t *hmac;
+  grub_size_t hmaclen;
+  grub_uint8_t *pbkdf2salt;
+  grub_size_t pbkdf2saltlen;
+};
 /*
  * List of pool features that the grub implementation of ZFS supports for
  * read. Note that features that are only required for write do not need
@@ -403,6 +412,54 @@ static decomp_entry_t decomp_table[ZIO_COMPRESS_FUNCTIONS] = {
 static grub_err_t zio_read_data (blkptr_t * bp, grub_zfs_endian_t endian,
 				 void *buf, struct grub_zfs_data *data);
 
+static int
+fill_crypt_datto_data (const void *name,
+		    grub_size_t namelen __attribute__ ((unused)),
+		    const void *val_in,
+		    grub_size_t nelem,
+		    grub_size_t elemsize,
+		    void *data_in)
+{
+  struct grub_zfs_crypt_datto_data *data = data_in;
+  if (grub_strcmp(name, "DSL_CRYPTO_IV") == 0 && elemsize == 1)
+    {
+      data->ivlen = nelem;
+      data->iv = grub_malloc(nelem);
+      if (data->iv)
+	grub_memcpy(data->iv, val_in, nelem);			       
+    }
+  else if (grub_strcmp(name, "DSL_CRYPTO_MAC") == 0 && elemsize == 1)
+    {
+      data->maclen = nelem;
+      data->mac = grub_malloc(nelem);
+      if (data->mac)
+	grub_memcpy(data->mac, val_in, nelem);			       
+    }
+  else if (grub_strcmp(name, "DSL_CRYPTO_MASTER_KEY_1") == 0 && elemsize == 1)
+    {
+      data->masterlen = nelem;
+      data->master = grub_malloc(nelem);
+      if (data->master)
+	grub_memcpy(data->master, val_in, nelem);			       
+    }
+  else if (grub_strcmp(name, "DSL_CRYPTO_HMAC_KEY_1") == 0 && elemsize == 1)
+    {
+      data->hmaclen = nelem;
+      data->hmac = grub_malloc(nelem);
+      if (data->hmac)
+	grub_memcpy(data->hmac, val_in, nelem);			       
+    }
+  else if (grub_strcmp(name, "pbkdf2salt") == 0 && elemsize == 8 && nelem == 1)
+    {
+      data->pbkdf2saltlen = nelem * elemsize;
+      data->pbkdf2salt = grub_malloc(nelem * elemsize);
+      if (data->pbkdf2salt)
+	grub_memcpy(data->pbkdf2salt, val_in, nelem * elemsize);			       
+    }
+  
+  return 0;
+}
+
 /*
  * Our own version of log2().  Same thing as highbit()-1.
  */
@@ -454,7 +511,7 @@ static zio_checksum_info_t zio_checksum_table[ZIO_CHECKSUM_FUNCTIONS] = {
 static grub_err_t
 zio_checksum_verify (zio_cksum_t zc, grub_uint32_t checksum,
 		     grub_zfs_endian_t endian,
-		     char *buf, grub_size_t size)
+		     char *buf, grub_size_t size, int datto_crypt)
 {
   zio_eck_t *zec = (zio_eck_t *) (buf + size) - 1;
   zio_checksum_info_t *ci = &zio_checksum_table[checksum];
@@ -478,8 +535,15 @@ zio_checksum_verify (zio_cksum_t zc, grub_uint32_t checksum,
   else
     ci->ci_func (buf, size, endian, &actual_cksum);
 
-  if (grub_memcmp (&actual_cksum, &zc,
-		   checksum != ZIO_CHECKSUM_SHA256_MAC ? 32 : 20) != 0)
+  int cksumlen = checksum != ZIO_CHECKSUM_SHA256_MAC ? 32 : 20;
+  if (datto_crypt)
+    {
+      actual_cksum.zc_word[0] ^= actual_cksum.zc_word[2];
+      actual_cksum.zc_word[1] ^= actual_cksum.zc_word[3];
+      cksumlen = 16;
+    }
+
+  if (grub_memcmp (&actual_cksum, &zc, cksumlen) != 0)
     {
       grub_dprintf ("zfs", "checksum %s verification failed\n", ci->ci_name);
       grub_dprintf ("zfs", "actual checksum %016llx %016llx %016llx %016llx\n",
@@ -572,7 +636,7 @@ uberblock_verify (uberblock_phys_t * ub, grub_uint64_t offset,
 
   zc.zc_word[0] = grub_cpu_to_zfs64 (offset, endian);
   err = zio_checksum_verify (zc, ZIO_CHECKSUM_LABEL, endian,
-			     (char *) ub, s);
+			     (char *) ub, s, 0);
 
   return err;
 }
@@ -1045,7 +1109,7 @@ check_pool_label (struct grub_zfs_data *data,
   /* Now check the integrity of the vdev_phys_t structure though checksum.  */
   ZIO_SET_CHECKSUM(&emptycksum, diskdesc->vdev_phys_sector << 9, 0, 0, 0);
   err = zio_checksum_verify (emptycksum, ZIO_CHECKSUM_LABEL, endian,
-			     nvlist, VDEV_PHYS_SIZE);
+			     nvlist, VDEV_PHYS_SIZE, 0);
   if (err)
     return err;
 
@@ -1790,7 +1854,7 @@ zio_read_gang (blkptr_t * bp, grub_zfs_endian_t endian, dva_t * dva, void *buf,
   ZIO_SET_CHECKSUM (&zc, DVA_GET_VDEV (dva),
 		    dva_get_offset (dva, endian), bp->blk_birth, 0);
   err = zio_checksum_verify (zc, ZIO_CHECKSUM_GANG_HEADER, endian,
-			     (char *) zio_gb, SPA_GANGBLOCKSIZE);
+			     (char *) zio_gb, SPA_GANGBLOCKSIZE, 0);
   if (err)
     {
       grub_free (zio_gb);
@@ -1883,26 +1947,89 @@ decode_embedded_bp_compressed(const blkptr_t *bp, void *buf)
   return GRUB_ERR_NONE;
 }
 
+static int
+datto_is_encrypted_type(grub_uint8_t dn_type)
+{
+  /* New structred types.  */
+  if (dn_type & 0x80)
+    return !!(dn_type & 0x20);
+  switch(dn_type) {
+  case DMU_OT_NONE ... DMU_OT_SPACE_MAP:
+  case DMU_OT_OBJSET ... DMU_OT_ZNODE:
+  case DMU_OT_MASTER_NODE:
+  case DMU_OT_ZVOL_PROP:
+  case DMU_OT_ZAP_OTHER ... DMU_OT_DSL_PERMS:
+  case DMU_OT_FUID_SIZE ... DMU_OT_SCRUB_QUEUE:
+  case DMU_OT_USERREFS ... DMU_OT_DDT_STATS:
+    return 0;
+  default:
+    return 1;
+  }
+}
+
+static void
+add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp)
+{
+  grub_uint64_t blk_prop = BP_IS_HOLE(&bp) ? 0 : bp.blk_prop;
+
+  if (BP_GET_LEVEL(&bp) != 0) {
+    blk_prop &= ~0x8000007fffff0000ULL;
+    blk_prop |= 0x10000;
+  }
+
+  blk_prop &= ~0x4000ff0000000000ULL;
+  
+  grub_set_unaligned64(&aad[*aad_offset], grub_cpu_to_le64(blk_prop));
+  *aad_offset += 8;
+
+  grub_memcpy(&aad[*aad_offset], &bp.blk_cksum.zc_word[2], 16);
+  *aad_offset += 16;
+
+  grub_memset(&aad[*aad_offset], 0, 8);
+  *aad_offset += 8;
+}
+
 /*
  * Read in a block of data, verify its checksum, decompress if needed,
  * and put the uncompressed data in buf.
  */
 static grub_err_t
-zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
+zio_read (blkptr_t *bp, dnode_end_t *dn, grub_zfs_endian_t endian, void **buf,
 	  grub_size_t *size, struct grub_zfs_data *data)
 {
   grub_size_t lsize, psize;
-  unsigned int comp, encrypted;
+  unsigned int comp;
   char *compbuf = NULL;
   grub_err_t err;
   zio_cksum_t zc = bp->blk_cksum;
   grub_uint32_t checksum;
+  int datto_encrypted = 0, datto_authenticated = 0, datto_dnode_encryption = 0, oracle_encrypted = 0;
 
   *buf = NULL;
 
   checksum = (grub_zfs_to_cpu64((bp)->blk_prop, endian) >> 40) & 0xff;
   comp = (grub_zfs_to_cpu64((bp)->blk_prop, endian)>>32) & 0x7f;
-  encrypted = ((grub_zfs_to_cpu64((bp)->blk_prop, endian) >> 60) & 3);
+  if ((grub_zfs_to_cpu64((bp)->blk_prop, endian) >> 61) & 1)
+    {
+      if (data->subvol.is_datto_encrypted)
+	{
+	  if (dn == NULL)
+	    datto_authenticated = 1;
+	  else if (dn->dn.dn_type == DMU_OT_DNODE)
+	    {
+	      datto_encrypted = 1;
+	      datto_authenticated = 0;
+	      datto_dnode_encryption = 1;
+	    }
+	  else
+	    {
+	      datto_encrypted = datto_is_encrypted_type(dn->dn.dn_type);
+	      datto_authenticated = !datto_encrypted;
+	    }
+	}
+      else
+	  oracle_encrypted = 1;
+    }
   if (BP_IS_EMBEDDED(bp))
     {
       if (BPE_GET_ETYPE(bp) != BP_EMBEDDED_TYPE_DATA)
@@ -1959,10 +2086,12 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
       return err;
     }
 
-  if (!BP_IS_EMBEDDED(bp))
+  /* TODO: Objset authentication.  */
+  if (!BP_IS_EMBEDDED(bp) && !datto_encrypted)
     {
       err = zio_checksum_verify (zc, checksum, endian,
-			         compbuf, psize);
+			         compbuf, psize,
+				 (datto_authenticated && (dn == NULL ||dn->dn.dn_type == DMU_OT_MASTER_NODE)));
       if (err)
         {
           grub_dprintf ("zfs", "incorrect checksum\n");
@@ -1972,51 +2101,147 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
         }
     }
 
-  if (encrypted)
+  if (datto_dnode_encryption && (!grub_zfs_decrypt || !data->subvol.key_datto.master_key))
     {
-      if (!grub_zfs_decrypt)
-	err = grub_error (GRUB_ERR_BAD_FS,
-			  N_("module `%s' isn't loaded"),
-			  "zfscrypt");
-      else
-	{
-	  unsigned i, besti = 0;
-	  grub_uint64_t bestval = 0;
-	  for (i = 0; i < data->subvol.nkeys; i++)
-	    if (data->subvol.keyring[i].txg <= grub_zfs_to_cpu64 (bp->blk_birth,
-								  endian)
-		&& data->subvol.keyring[i].txg > bestval)
-	      {
-		besti = i;
-		bestval = data->subvol.keyring[i].txg;
-	      }
-	  if (bestval == 0)
-	    {
-	      grub_free (compbuf);
-	      *buf = NULL;
-	      grub_dprintf ("zfs", "no key for txg %" PRIxGRUB_UINT64_T "\n",
-			    grub_zfs_to_cpu64 (bp->blk_birth,
-					       endian));
-	      return grub_error (GRUB_ERR_BAD_FS, "no key found in keychain");
-	    }
-	  grub_dprintf ("zfs", "using key %u (%" PRIxGRUB_UINT64_T
-			", %p) for txg %" PRIxGRUB_UINT64_T "\n",
-			besti, data->subvol.keyring[besti].txg,
-			data->subvol.keyring[besti].cipher,
-			grub_zfs_to_cpu64 (bp->blk_birth,
-					   endian));
-	  err = grub_zfs_decrypt (data->subvol.keyring[besti].cipher,
-				  data->subvol.keyring[besti].algo,
-				  &(bp)->blk_dva[encrypted],
-				  compbuf, psize, zc.zc_mac,
-				  endian);
-	}
-      if (err)
+      grub_dprintf("zfs", "Skipping decrypt of bonus because of missing zfscrypt module or key");
+      datto_encrypted = 0;
+      datto_dnode_encryption = 0;
+    }
+  if ((oracle_encrypted || datto_encrypted) && !grub_zfs_decrypt)
+    err = grub_error (GRUB_ERR_BAD_FS,
+		      N_("module `%s' isn't loaded"),
+		      "zfscrypt");
+  else if (datto_encrypted)
+    {
+      grub_uint32_t iv[3];
+
+      if (!data->subvol.key_datto.master_key)
 	{
 	  grub_free (compbuf);
 	  *buf = NULL;
-	  return err;
+	  grub_dprintf ("zfs", "no key for txg %" PRIxGRUB_UINT64_T "\n",
+			grub_zfs_to_cpu64 (bp->blk_birth,
+					       endian));
+	  return grub_error (GRUB_ERR_BAD_FS, "no key found in keychain");
 	}
+	  
+      iv[0] = (bp)->blk_dva[2].dva_word[1];
+      iv[1] = (bp)->blk_dva[2].dva_word[1] >> 32;
+      iv[2] = (bp)->blk_fill >> 32;
+
+      if (datto_dnode_encryption)
+	{
+	  grub_size_t offset = 0, crypt_offset = 0, aad_offset = 0;
+	  char *crypt = grub_malloc(psize), *aad = grub_malloc(psize);
+	  if (!crypt || !aad)
+	    {
+	      grub_free (compbuf);
+	      grub_free (crypt);
+	      grub_free (aad);
+	      *buf = NULL;
+	      return grub_errno;
+	    }
+	  for (offset = 0; offset + sizeof (dnode_phys_t) <= psize; offset += sizeof(dnode_phys_t))
+	    {
+	      dnode_phys_t *dnp = (dnode_phys_t *) (compbuf + offset);
+	      grub_memcpy(aad + aad_offset, dnp, 64);
+	      ((dnode_phys_t *)(aad + aad_offset))->dn_used = 0;
+	      ((dnode_phys_t *)(aad + aad_offset))->dn_flags &= DNODE_FLAG_SPILL_BLKPTR;
+	      int has_spill = dnp->dn_flags & DNODE_FLAG_SPILL_BLKPTR;
+	      unsigned i;
+
+	      aad_offset += 64;
+
+	      for (i = 0; i < dnp->dn_nblkptr; i++)
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_blkptr[i]);
+	      
+	      if (has_spill)
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_spill);
+
+	      char *bonus = DN_BONUS(dnp);
+	      char *bonusmaxptr = (char *) (dnp + 1);
+	      if (has_spill)
+		bonusmaxptr -= sizeof(blkptr_t);
+	      grub_size_t bonusmaxlen = bonusmaxptr - bonus;
+	      if (datto_is_encrypted_type(dnp->dn_bonustype))
+		{
+		  grub_memcpy(crypt + crypt_offset, bonus, bonusmaxlen);
+		  crypt_offset += bonusmaxlen;
+		}
+	      else
+		{
+		  grub_memcpy(aad + aad_offset, bonus, bonusmaxlen);
+		  aad_offset += bonusmaxlen;
+		}
+	    }
+	  err = grub_zfs_decrypt->decrypt_datto (&data->subvol.key_datto,
+						 iv, (bp)->blk_dva[2].dva_word[0],
+						 crypt, crypt_offset, aad, aad_offset,
+						 (const grub_uint32_t *) &zc.zc_word[2],
+						 endian);
+	  grub_size_t out_offset = 0;
+	  for (offset = 0; offset + sizeof (dnode_phys_t) <= psize; offset += sizeof(dnode_phys_t))
+	    {
+	      dnode_phys_t *dnp = (dnode_phys_t *) (compbuf + offset);
+	      int has_spill = dnp->dn_flags & DNODE_FLAG_SPILL_BLKPTR;
+	      if (!datto_is_encrypted_type(dnp->dn_bonustype))
+		continue;
+	      char * bonus = DN_BONUS(dnp);
+	      char *bonusmaxptr = (char *) (dnp + 1);
+	      if (has_spill)
+		bonusmaxptr -= sizeof(blkptr_t);
+	      grub_size_t bonusmaxlen = bonusmaxptr - bonus;
+	      grub_memcpy(bonus, crypt + out_offset, bonusmaxlen);
+	      out_offset += bonusmaxlen;
+	    }
+
+	}
+      else
+	err = grub_zfs_decrypt->decrypt_datto (&data->subvol.key_datto,
+					       iv, (bp)->blk_dva[2].dva_word[0],
+					       compbuf, psize, NULL, 0,
+					       (const grub_uint32_t *) &zc.zc_word[2],
+					       endian);
+    }
+  else if (oracle_encrypted)
+    {
+      unsigned i, besti = 0;
+      grub_uint64_t bestval = 0;
+      grub_dprintf("zfs", "Subvol has %d keys\n", (int) data->subvol.nkeys);
+      for (i = 0; i < data->subvol.nkeys; i++)
+	if (data->subvol.keyring[i].txg <= grub_zfs_to_cpu64 (bp->blk_birth,
+							      endian)
+	    && data->subvol.keyring[i].txg > bestval)
+	  {
+	    besti = i;
+	    bestval = data->subvol.keyring[i].txg;
+	  }
+      if (bestval == 0)
+	{
+	  grub_free (compbuf);
+	  *buf = NULL;
+	  grub_dprintf ("zfs", "no key for txg %" PRIxGRUB_UINT64_T "\n",
+			grub_zfs_to_cpu64 (bp->blk_birth,
+					   endian));
+	  return grub_error (GRUB_ERR_BAD_FS, "no key found in keychain");
+	}
+      grub_dprintf ("zfs", "using key %u (%" PRIxGRUB_UINT64_T
+		    ", %p) for txg %" PRIxGRUB_UINT64_T "\n",
+		    besti, data->subvol.keyring[besti].txg,
+		    data->subvol.keyring[besti].cipher,
+		    grub_zfs_to_cpu64 (bp->blk_birth,
+				       endian));
+      err = grub_zfs_decrypt->decrypt_oracle (data->subvol.keyring[besti].cipher,
+					      data->subvol.keyring[besti].algo,
+					      &(bp)->blk_dva[2],
+					      compbuf, psize, zc.zc_mac,
+					      endian);
+    }
+  if (err)
+    {
+      grub_free (compbuf);
+      *buf = NULL;
+      return err;
     }
 
   if (comp != ZIO_COMPRESS_OFF)
@@ -2063,6 +2288,8 @@ dmu_read (dnode_end_t * dn, grub_uint64_t blkid, void **buf,
   if (!bp)
     return grub_errno;
 
+  *buf = NULL;
+
   endian = dn->endian;
   for (level = dn->dn.dn_nlevels - 1; level >= 0; level--)
     {
@@ -2093,12 +2320,12 @@ dmu_read (dnode_end_t * dn, grub_uint64_t blkid, void **buf,
       if (level == 0)
 	{
 	  grub_dprintf ("zfs", "endian = %d\n", endian);
-	  err = zio_read (bp, endian, buf, 0, data);
+	  err = zio_read (bp, dn, endian, buf, 0, data);
 	  endian = (grub_zfs_to_cpu64 (bp->blk_prop, endian) >> 63) & 1;
 	  break;
 	}
       grub_dprintf ("zfs", "endian = %d\n", endian);
-      err = zio_read (bp, endian, &tmpbuf, 0, data);
+      err = zio_read (bp, NULL, endian, &tmpbuf, 0, data);
       endian = (grub_zfs_to_cpu64 (bp->blk_prop, endian) >> 63) & 1;
       if (err)
 	break;
@@ -2736,6 +2963,8 @@ dnode_get (dnode_end_t * mdn, grub_uint64_t objnum, grub_uint8_t type,
   err = dmu_read (mdn, blkid, &dnbuf, &endian, data);
   if (err)
     return err;
+  if (dnbuf == NULL)
+    return grub_error(GRUB_ERR_BAD_FS, "invalid or unavailable dnode");
   grub_dprintf ("zfs", "alive\n");
 
   grub_free (data->dnode_buf);
@@ -2785,6 +3014,9 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
     dnode_end_t dn;
   };
   struct dnode_chain *dnode_path = 0, *dn_new, *root;
+
+  if (!subvol->have_mdn)
+    return grub_error(GRUB_ERR_BAD_FS, "no key found in keychain");
 
   dn_new = grub_malloc (sizeof (*dn_new));
   if (! dn_new)
@@ -3013,7 +3245,7 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 	    {
 	      blkptr_t *bp = &dnode_path->dn.dn.dn_spill;
 
-	      err = zio_read (bp, dnode_path->dn.endian, &sahdrp, NULL, data);
+	      err = zio_read (bp, &dnode_path->dn, dnode_path->dn.endian, &sahdrp, NULL, data);
 	      if (err)
 	        break;
 	    }
@@ -3218,7 +3450,7 @@ make_mdn (dnode_end_t * mdn, struct grub_zfs_data *data)
   grub_dprintf ("zfs", "endian = %d\n", mdn->endian);
 
   bp = &(((dsl_dataset_phys_t *) DN_BONUS (&mdn->dn))->ds_bp);
-  err = zio_read (bp, mdn->endian, (void **) &osp, &ospsize, data);
+  err = zio_read (bp, mdn, mdn->endian, (void **) &osp, &ospsize, data);
   if (err)
     return err;
   if (ospsize < OBJSET_PHYS_SIZE_V14)
@@ -3283,8 +3515,8 @@ load_zap_key (const void *name, grub_size_t namelen, const void *val_in,
   ctx->subvol->keyring[ctx->keyn].algo =
     grub_le_to_cpu64 (*(grub_uint64_t *) val_in);
   ctx->subvol->keyring[ctx->keyn].cipher =
-    grub_zfs_load_key (val_in, nelem, ctx->salt,
-		       ctx->subvol->keyring[ctx->keyn].algo);
+    grub_zfs_decrypt->load_key_oracle (val_in, nelem, ctx->salt,
+				       ctx->subvol->keyring[ctx->keyn].algo);
   ctx->keyn++;
   return 0;
 }
@@ -3349,6 +3581,73 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
 
   grub_dprintf ("zfs", "alive\n");
 
+  grub_uint64_t crypt_obj;
+
+  err = zap_lookup (dn, "com.datto:crypto_key_obj", &crypt_obj, data, 0);
+  if (err)
+    {
+      grub_errno = GRUB_ERR_NONE;
+      crypt_obj = 0;
+    }
+
+  grub_dprintf("zfs", "crypt obj = %lld\n", (long long) crypt_obj);
+  subvol->is_datto_encrypted = crypt_obj != 0;
+
+  if (grub_zfs_decrypt && crypt_obj)
+    {
+      dnode_end_t crypt_dn;
+      err = dnode_get (&(data->mos), crypt_obj, 0xc4,
+		       &crypt_dn, data);
+      if (err)
+	{
+	  grub_free (fsname);
+	  grub_free (snapname);
+	  return err;
+	}
+
+      err = dnode_get (&(data->mos), crypt_obj, 0 /* ?? */,
+		       &crypt_dn, data);
+      struct grub_zfs_crypt_datto_data crypt_datto_data = { 0 };
+      grub_uint64_t pbkdf2iters = 0, guid = 0, algo = 0, version = 0;
+      zap_iterate (&crypt_dn, 1, fill_crypt_datto_data, &crypt_datto_data, data);
+
+      err = zap_lookup (&crypt_dn, "pbkdf2iters", &pbkdf2iters, data, 0);
+      if (err)
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  pbkdf2iters = 0;
+	}
+
+      err = zap_lookup (&crypt_dn, "DSL_CRYPTO_GUID", &guid, data, 0);
+      if (err)
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  guid = 0;
+	}
+	  
+      err = zap_lookup (&crypt_dn, "DSL_CRYPTO_SUITE", &algo, data, 0);
+      if (err)
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  algo = 0;
+	}
+
+      err = zap_lookup (&crypt_dn, "DSL_CRYPTO_VERSION", &version, data, 0);
+      if (err)
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  version = 0;
+	}
+
+      subvol->key_datto = grub_zfs_decrypt->load_key_datto(crypt_datto_data.iv, crypt_datto_data.ivlen,
+							   crypt_datto_data.mac, crypt_datto_data.maclen,
+							   crypt_datto_data.master, crypt_datto_data.masterlen,
+							   crypt_datto_data.hmac, crypt_datto_data.hmaclen,
+							   crypt_datto_data.pbkdf2salt, crypt_datto_data.pbkdf2saltlen,
+							   pbkdf2iters, guid, algo, version);
+    }
+
+
   headobj = grub_zfs_to_cpu64 (((dsl_dir_phys_t *) DN_BONUS (&dn->dn))->dd_head_dataset_obj, dn->endian);
 
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
@@ -3365,7 +3664,10 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
   grub_dprintf ("zfs", "endian = %d\n", subvol->mdn.endian);
 
   keychainobj = grub_zfs_to_cpu64 (((dsl_dir_phys_t *) DN_BONUS (&dn->dn))->keychain, dn->endian);
-  if (grub_zfs_load_key && keychainobj)
+
+  grub_dprintf("zfs", "keychain obj = %lld\n", (long long) keychainobj);
+
+  if (grub_zfs_decrypt && !subvol->is_datto_encrypted && keychainobj)
     {
       struct dnode_get_fullpath_ctx ctx = {
 	.subvol = subvol,
@@ -3744,7 +4046,7 @@ zfs_mount (grub_device_t dev)
 				  GRUB_ZFS_LITTLE_ENDIAN) == UBERBLOCK_MAGIC
 	       ? GRUB_ZFS_LITTLE_ENDIAN : GRUB_ZFS_BIG_ENDIAN);
 
-  err = zio_read (&ub->ub_rootbp, ub_endian,
+  err = zio_read (&ub->ub_rootbp, NULL, ub_endian,
 		  (void **) &osp, &ospsize, data);
   if (err)
     {
@@ -3913,7 +4215,7 @@ grub_zfs_open (struct grub_file *file, const char *fsfilename)
 	{
 	  blkptr_t *bp = &data->dnode.dn.dn_spill;
 
-	  err = zio_read (bp, data->dnode.endian, &sahdrp, NULL, data);
+	  err = zio_read (bp, &data->dnode, data->dnode.endian, &sahdrp, NULL, data);
 	  if (err)
 	    return err;
 	}
@@ -4121,7 +4423,7 @@ fill_fs_info (struct grub_dirhook_info *info,
 	{
 	  blkptr_t *bp = &dn.dn.dn_spill;
 
-	  err = zio_read (bp, dn.endian, &sahdrp, NULL, data);
+	  err = zio_read (bp, &dn, dn.endian, &sahdrp, NULL, data);
 	  if (err)
 	    return err;
 	}
@@ -4174,7 +4476,7 @@ iterate_zap (const char *name, grub_uint64_t val, struct grub_zfs_dir_ctx *ctx)
 	{
 	  blkptr_t *bp = &dn.dn.dn_spill;
 
-	  err = zio_read (bp, dn.endian, &sahdrp, NULL, ctx->data);
+	  err = zio_read (bp, &dn, dn.endian, &sahdrp, NULL, ctx->data);
 	  if (err)
 	    {
 	      grub_print_error ();
