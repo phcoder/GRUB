@@ -2239,7 +2239,7 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 	err = grub_zfs_decrypt->decrypt_datto (&data->subvol.key_datto,
 					       iv, (bp)->blk_dva[2].dva_word[0],
 					       compbuf, psize, NULL, 0,
-					       (const grub_uint32_t *) &zc.zc_word[2],
+					       &zc.zc_word[2],
 					       endian);
     }
   else if (oracle_encrypted)
