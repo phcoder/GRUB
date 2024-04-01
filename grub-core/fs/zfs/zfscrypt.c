@@ -133,11 +133,11 @@ grub_ccm_decrypt (grub_crypto_cipher_handle_t cipher,
   grub_uint32_t mac[4];
   unsigned i, j, l = 15 - noncelen, aprefixlen = 0;
   gcry_err_code_t err;
-  grub_uint8_t aprefix[16];
+  grub_uint8_t aprefix[16] = { 0 };
 
   grub_memcpy (iv + 1, nonce, noncelen);
 
-  iv[0] = (l - 1) | (((m-2) / 2) << 3) | ((!!aadsize) << 6);
+  iv[0] = (l - 1) | (((m-2) / 2) << 3) | ((aadsize != 0) << 6);
   for (j = 0; j < l; j++)
     iv[15 - j] = psize >> (8 * j);
   err = grub_crypto_ecb_encrypt (cipher, mac, iv, 16);
@@ -169,7 +169,6 @@ grub_ccm_decrypt (grub_crypto_cipher_handle_t cipher,
 
   if (aadsize != 0)
     {
-      grub_memset(aprefix + aprefixlen, 0, 16 - aprefixlen);
       grub_size_t ablocks = (aadsize + aprefixlen + 15) / 16;
       grub_size_t first_block_datalen = 16 - aprefixlen;
       if (first_block_datalen > aadsize)
@@ -189,6 +188,8 @@ grub_ccm_decrypt (grub_crypto_cipher_handle_t cipher,
 	    csize = aadsize - instart;
 	  grub_crypto_xor (mac, mac, aad + instart, csize);
 	  err = grub_crypto_ecb_encrypt (cipher, mac, mac, 16);
+	  if (err)
+	    return err;
 	}
     }
 
