@@ -300,11 +300,11 @@ algo_decrypt (grub_crypto_cipher_handle_t cipher, grub_uint64_t algo,
     {
     case GRUB_ZFS_ALGO_CCM:
       return grub_ccm_decrypt (cipher, out, in, psize,
-			       mac_out, nonce, l <= 15 ? l : 0, m);
+			       mac_out, nonce, l <= 15 ? 15 - l : 0, m);
     case GRUB_ZFS_ALGO_GCM:
       return grub_gcm_decrypt (cipher, out, in, psize,
 			       aad, aadsize, mac_out, nonce,
-			       l <= 15 ? 15 - l : 0, m);
+			       l <= 15 ? l : 0, m);
     default:
       return GPG_ERR_CIPHER_ALGO;
     }
@@ -335,7 +335,7 @@ grub_zfs_decrypt_oracle (grub_crypto_cipher_handle_t cipher,
 		      (grub_uint8_t *) buf,
 		      (grub_uint8_t *) buf,
 		      size, NULL, 0, mac,
-		      sw, 3, 12);
+		      sw, 12, 12);
   if (err)
     return grub_crypto_gcry_error (err);
 
@@ -396,7 +396,7 @@ grub_zfs_decrypt_datto (const struct grub_zfs_datto_key *key,
 		      (grub_uint8_t *) buf,
 		      (grub_uint8_t *) buf,
 		      size, (grub_uint8_t *) aadbuf, aadsize, mac,
-		      nonce, 3, 12);
+		      nonce, 12, 12);
   grub_crypto_cipher_close (cipher);
   if (err)
     return grub_crypto_gcry_error (err);
@@ -471,7 +471,7 @@ grub_zfs_load_key_oracle (const struct grub_zfs_key_oracle *key,
 	}
 
       err = algo_decrypt (cipher, algo, decrypted, key->unknown_purpose_key, 32,
-			  NULL, 0, mac, key->unknown_purpose_nonce, 2, 16);
+			  NULL, 0, mac, key->unknown_purpose_nonce, 13, 16);
       if (err || (grub_crypto_memcmp (mac, key->unknown_purpose_key + 32, 16)
 		  != 0))
 	{
@@ -482,7 +482,7 @@ grub_zfs_load_key_oracle (const struct grub_zfs_key_oracle *key,
 	}
 
       err = algo_decrypt (cipher, algo, decrypted, key->enc_key, keylen, NULL, 0,
-			  mac, key->enc_nonce, 2, 16);
+			  mac, key->enc_nonce, 13, 16);
       if (err || grub_crypto_memcmp (mac, key->enc_key + keylen, 16) != 0)
 	{
 	  grub_dprintf ("zfs", "key loading failed\n");
@@ -593,13 +593,10 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
 	  continue;
 	}
 
-      if (datto_algos[algo].used_algo == GRUB_ZFS_ALGO_GCM)
-	err = grub_gcm_decrypt (cipher, plaintext, ciphertext, masterlen + hmaclen,
-				(grub_uint8_t *) &aad, sizeof(aad),
-				mac_computed, iv, ivlen, mac_inlen);
-      else
-	err = grub_ccm_decrypt (cipher, plaintext, ciphertext, masterlen + hmaclen,
-				mac_computed, iv, ivlen, mac_inlen);
+      err = algo_decrypt (cipher, datto_algos[algo].used_algo,
+			  plaintext, ciphertext, masterlen + hmaclen,
+			  (grub_uint8_t *) &aad, sizeof(aad),
+			  mac_computed, iv, ivlen, mac_inlen);
       if (err || (grub_crypto_memcmp (mac_computed, mac_in, mac_inlen) != 0))
 	{
 	  grub_dprintf ("zfs", "key loading failed\n");
