@@ -59,23 +59,22 @@ enum grub_zfs_algo
 
 struct datto_algo {
   grub_size_t wrapkeylen;
-  grub_size_t masterlen;
-  grub_size_t hmaclen;
-  grub_size_t maclen;
+  grub_size_t cryptkeylen;
+  grub_size_t masterkeylen;
   enum grub_zfs_algo used_algo;
 } datto_algos[] = {
   { 0 },
   { 0 },
   { 0 },
-  { 16, 16, 64, 16, GRUB_ZFS_ALGO_CCM },
-  { 24, 24, 64, 16, GRUB_ZFS_ALGO_CCM },
-  { 32, 32, 64, 16, GRUB_ZFS_ALGO_CCM },
-  { 16, 16, 64, 16, GRUB_ZFS_ALGO_GCM },
-  { 24, 24, 64, 16, GRUB_ZFS_ALGO_GCM },
-  { 32, 32, 64, 16, GRUB_ZFS_ALGO_GCM },
+  { 32, 16, 16, GRUB_ZFS_ALGO_CCM },
+  { 32, 24, 24, GRUB_ZFS_ALGO_CCM },
+  { 32, 32, 32, GRUB_ZFS_ALGO_CCM },
+  { 32, 16, 16, GRUB_ZFS_ALGO_GCM },
+  { 32, 24, 24, GRUB_ZFS_ALGO_GCM },
+  { 32, 32, 32, GRUB_ZFS_ALGO_GCM },
 };
-#define MAX_MACLEN 16
 #define MAX_WRAPCIPHERTEXTLEN 96
+#define MAX_MACLEN 16
 
 struct grub_zfs_key_oracle
 {
@@ -386,7 +385,7 @@ grub_zfs_decrypt_datto (const struct grub_zfs_datto_key *key,
   cipher = grub_crypto_cipher_open (GRUB_CIPHER_AES);
   if (!cipher)
     return grub_crypto_gcry_error (err);
-  err = grub_crypto_cipher_set_key (cipher, expandkey, datto_algos[key->algo].masterlen);
+  err = grub_crypto_cipher_set_key (cipher, expandkey, datto_algos[key->algo].cryptkeylen);
   if (err)
     {
       grub_crypto_cipher_close (cipher);
@@ -529,11 +528,14 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
       return ret;
     }
 
-  if (masterlen != datto_algos[algo].masterlen || hmaclen != datto_algos[algo].hmaclen || mac_inlen != datto_algos[algo].maclen)
+  /* Note: if last two ever become variable they need to be checkecked as matching algo. Especially mac_inlen.  */
+  if (masterlen < datto_algos[algo].masterkeylen || hmaclen != 64 || mac_inlen != 16)
     {
       grub_error(GRUB_ERR_BAD_FS, "crypto keys are invalid");
       return ret;
     }
+
+  masterlen = datto_algos[algo].masterkeylen;
 
   grub_uint8_t ciphertext[MAX_WRAPCIPHERTEXTLEN];
   grub_uint8_t plaintext[MAX_WRAPCIPHERTEXTLEN];
@@ -548,8 +550,8 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
     grub_cpu_to_le64(version)
   };
 
-  grub_memcpy(ciphertext, master, datto_algos[algo].masterlen);
-  grub_memcpy(ciphertext + datto_algos[algo].masterlen, hmac, datto_algos[algo].hmaclen);
+  grub_memcpy(ciphertext, master, masterlen);
+  grub_memcpy(ciphertext + masterlen, hmac, hmaclen);
 
   for (wrap_key = zfs_wrap_keys; wrap_key; wrap_key = wrap_key->next)
     {
@@ -592,13 +594,13 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
 	}
 
       if (datto_algos[algo].used_algo == GRUB_ZFS_ALGO_GCM)
-	err = grub_gcm_decrypt (cipher, plaintext, ciphertext, datto_algos[algo].masterlen + datto_algos[algo].hmaclen,
+	err = grub_gcm_decrypt (cipher, plaintext, ciphertext, masterlen + hmaclen,
 				(grub_uint8_t *) &aad, sizeof(aad),
-				mac_computed, iv, ivlen, datto_algos[algo].maclen);
+				mac_computed, iv, ivlen, mac_inlen);
       else
-	err = grub_ccm_decrypt (cipher, plaintext, ciphertext, datto_algos[algo].masterlen + datto_algos[algo].hmaclen,
-				mac_computed, iv, ivlen, datto_algos[algo].maclen);
-      if (err || (grub_crypto_memcmp (mac_computed, mac_in, datto_algos[algo].maclen) != 0))
+	err = grub_ccm_decrypt (cipher, plaintext, ciphertext, masterlen + hmaclen,
+				mac_computed, iv, ivlen, mac_inlen);
+      if (err || (grub_crypto_memcmp (mac_computed, mac_in, mac_inlen) != 0))
 	{
 	  grub_dprintf ("zfs", "key loading failed\n");
 	  grub_errno = GRUB_ERR_NONE;
@@ -606,12 +608,12 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
 	  continue;
 	}
 
-      ret.master_keylen = datto_algos[algo].masterlen;
+      ret.master_keylen = masterlen;
       ret.master_key = grub_malloc(ret.master_keylen);
       if (!ret.master_key)
 	return ret;
-      grub_memcpy(ret.master_key, plaintext, datto_algos[algo].masterlen);
-      ret.hmac_key = grub_malloc(datto_algos[algo].hmaclen);
+      grub_memcpy(ret.master_key, plaintext, masterlen);
+      ret.hmac_key = grub_malloc(hmaclen);
       if (!ret.hmac_key)
 	{
 	  grub_free(ret.master_key);
@@ -619,7 +621,7 @@ grub_zfs_load_key_datto (const grub_uint8_t *iv, grub_size_t ivlen,
 	  return ret;
 	}
       ret.algo = algo;
-      grub_memcpy(ret.hmac_key, plaintext + datto_algos[algo].masterlen, datto_algos[algo].hmaclen);
+      grub_memcpy(ret.hmac_key, plaintext + masterlen, hmaclen);
       return ret;
     }
   return ret;
