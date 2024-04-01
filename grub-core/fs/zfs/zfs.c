@@ -288,8 +288,6 @@ struct grub_zfs_crypt_datto_data
   grub_size_t masterlen;
   grub_uint8_t *hmac;
   grub_size_t hmaclen;
-  grub_uint8_t *pbkdf2salt;
-  grub_size_t pbkdf2saltlen;
 };
 /*
  * List of pool features that the grub implementation of ZFS supports for
@@ -448,13 +446,6 @@ fill_crypt_datto_data (const void *name,
       data->hmac = grub_malloc(nelem);
       if (data->hmac)
 	grub_memcpy(data->hmac, val_in, nelem);			       
-    }
-  else if (grub_strcmp(name, "pbkdf2salt") == 0 && elemsize == 8 && nelem == 1)
-    {
-      data->pbkdf2saltlen = nelem * elemsize;
-      data->pbkdf2salt = grub_malloc(nelem * elemsize);
-      if (data->pbkdf2salt)
-	grub_memcpy(data->pbkdf2salt, val_in, nelem * elemsize);			       
     }
   
   return 0;
@@ -2151,7 +2142,7 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 
   if (datto_dnode_encryption && (!grub_zfs_decrypt || !data->subvol.key_datto.master_key))
     {
-      grub_dprintf("zfs", "Skipping decrypt of bonus because of missing zfscrypt module or key");
+      grub_dprintf("zfs", "Skipping decrypt of bonus because of missing zfscrypt module or key\n");
       datto_encrypted = 0;
       datto_dnode_encryption = 0;
     }
@@ -3701,7 +3692,7 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
       err = dnode_get (&(data->mos), crypt_obj, 0 /* ?? */,
 		       &crypt_dn, data);
       struct grub_zfs_crypt_datto_data crypt_datto_data = { 0 };
-      grub_uint64_t pbkdf2iters = 0, guid = 0, algo = 0, version = 0;
+      grub_uint64_t pbkdf2iters = 0, pbkdf2salt = 0, guid = 0, algo = 0, version = 0;
       zap_iterate (&crypt_dn, 1, fill_crypt_datto_data, &crypt_datto_data, data);
 
       err = zap_lookup (&crypt_dn, "pbkdf2iters", &pbkdf2iters, data, 0);
@@ -3732,11 +3723,20 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
 	  version = 0;
 	}
 
+      err = zap_lookup (&crypt_dn, "pbkdf2salt", &pbkdf2salt, data, 0);
+      if (err)
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  pbkdf2salt = 0;
+	}
+
+      pbkdf2salt = grub_cpu_to_le64(pbkdf2salt);
+
       subvol->key_datto = grub_zfs_decrypt->load_key_datto(crypt_datto_data.iv, crypt_datto_data.ivlen,
 							   crypt_datto_data.mac, crypt_datto_data.maclen,
 							   crypt_datto_data.master, crypt_datto_data.masterlen,
 							   crypt_datto_data.hmac, crypt_datto_data.hmaclen,
-							   crypt_datto_data.pbkdf2salt, crypt_datto_data.pbkdf2saltlen,
+							   (const grub_uint8_t *) &pbkdf2salt, sizeof (pbkdf2salt),
 							   pbkdf2iters, guid, algo, version);
     }
 
