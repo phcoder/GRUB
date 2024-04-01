@@ -1974,7 +1974,6 @@ add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp)
 
   if (BP_GET_LEVEL(&bp) != 0) {
     blk_prop &= ~0x8000007fffff0000ULL;
-    blk_prop |= 0x10000;
   }
 
   blk_prop &= ~0x4000ff0000000000ULL;
@@ -2023,7 +2022,10 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 	      datto_dnode_encryption = 1;
 	    }
 	  else if (type == DMU_OT_OBJSET)
-	    ;
+	    {
+	      /* Objset uses inner hmacs that we don't suport yet.
+		 Normal checksum is unaffected . */
+	    }
 	  else
 	    {
 	      datto_encrypted = datto_is_encrypted_type(type);
@@ -2089,7 +2091,6 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
       return err;
     }
 
-  /* TODO: Objset authentication.  */
   if (!BP_IS_EMBEDDED(bp) && !datto_encrypted)
     {
       err = zio_checksum_verify (zc, checksum, endian,
@@ -2107,14 +2108,21 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
   if (!BP_IS_EMBEDDED(bp) && datto_authenticated && data->subvol.key_datto.hmac_key && BP_GET_LEVEL(bp) == 0)
     {
       grub_uint8_t hmac[64];
-      gcry_error_t err_gcry = grub_crypto_hmac_buffer (GRUB_MD_SHA512,
-						       data->subvol.key_datto.hmac_key, 64,
-						       compbuf, psize,
-						       hmac);
+      gcry_error_t err_gcry;
+      err_gcry = grub_crypto_hmac_buffer (GRUB_MD_SHA512,
+					  data->subvol.key_datto.hmac_key, 64,
+					  compbuf, psize,
+					  hmac);
       if (err_gcry)
-	return grub_crypto_gcry_error (err_gcry);
+	{
+	  grub_free (compbuf);
+          *buf = NULL;
+	  return grub_crypto_gcry_error (err_gcry);
+	}
       if (grub_crypto_memcmp(&zc.zc_word[2], hmac, 8) != 0)
 	{
+	  grub_free (compbuf);
+          *buf = NULL;
 	  grub_dprintf ("zfs", "actual hmac "
 			"%02x %02x %02x %02x %02x %02x %02x %02x "
 			"%02x %02x %02x %02x %02x %02x %02x %02x "
@@ -2300,6 +2308,51 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 	  grub_free (*buf);
 	  *buf = NULL;
 	  return err;
+	}
+    }
+
+  if (!BP_IS_EMBEDDED(bp) && datto_authenticated && BP_GET_LEVEL(bp) > 0)
+    {
+      grub_uint8_t hash[64];
+      char *aad = grub_malloc(lsize);
+      grub_size_t aad_offset = 0;
+      if (!aad)
+	{
+	  grub_free (*buf);
+	  *buf = NULL;
+	  return grub_errno;
+	}
+      for (unsigned i = 0; i < lsize / sizeof(blkptr_t); i++)
+	add_blkptr_to_aad (aad, &aad_offset, ((blkptr_t *)*buf)[i]);
+      grub_crypto_hash(GRUB_MD_SHA512, hash, aad, aad_offset);
+      grub_free(aad);
+      if (grub_crypto_memcmp(&zc.zc_word[2], hash, 8) != 0)
+	{
+	  grub_free (compbuf);
+          *buf = NULL;
+	  grub_dprintf ("zfs", "actual hash "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x\n",
+			hash[ 0], hash[ 1], hash[ 2], hash[ 3], hash[ 4], hash[ 5], hash[ 6], hash[ 7],
+			hash[ 8], hash[ 9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15],
+			hash[16], hash[17], hash[18], hash[19], hash[20], hash[21], hash[22], hash[23],
+			hash[24], hash[25], hash[26], hash[27], hash[28], hash[29], hash[30], hash[31],
+			hash[32], hash[33], hash[34], hash[35], hash[36], hash[37], hash[38], hash[39],
+			hash[40], hash[41], hash[42], hash[43], hash[44], hash[45], hash[46], hash[47],
+			hash[48], hash[49], hash[50], hash[51], hash[52], hash[53], hash[54], hash[55],
+			hash[56], hash[57], hash[58], hash[59], hash[60], hash[61], hash[62], hash[63]);
+	  grub_dprintf ("zfs", "expected hash %016llx %016llx %016llx %016llx\n",
+			(unsigned long long) zc.zc_word[0],
+			(unsigned long long) zc.zc_word[1],
+			(unsigned long long) zc.zc_word[2],
+			(unsigned long long) zc.zc_word[3]);
+	  return grub_error (GRUB_ERR_BAD_FS, N_("hash verification failed"));
 	}
     }
 
