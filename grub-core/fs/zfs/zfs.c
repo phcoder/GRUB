@@ -2104,6 +2104,43 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
         }
     }
 
+  if (!BP_IS_EMBEDDED(bp) && datto_authenticated && data->subvol.key_datto.hmac_key && BP_GET_LEVEL(bp) == 0)
+    {
+      grub_uint8_t hmac[64];
+      gcry_error_t err_gcry = grub_crypto_hmac_buffer (GRUB_MD_SHA512,
+						       data->subvol.key_datto.hmac_key, 64,
+						       compbuf, psize,
+						       hmac);
+      if (err_gcry)
+	return grub_crypto_gcry_error (err_gcry);
+      if (grub_crypto_memcmp(&zc.zc_word[2], hmac, 8) != 0)
+	{
+	  grub_dprintf ("zfs", "actual hmac "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x "
+			"%02x %02x %02x %02x %02x %02x %02x %02x\n",
+			hmac[ 0], hmac[ 1], hmac[ 2], hmac[ 3], hmac[ 4], hmac[ 5], hmac[ 6], hmac[ 7],
+			hmac[ 8], hmac[ 9], hmac[10], hmac[11], hmac[12], hmac[13], hmac[14], hmac[15],
+			hmac[16], hmac[17], hmac[18], hmac[19], hmac[20], hmac[21], hmac[22], hmac[23],
+			hmac[24], hmac[25], hmac[26], hmac[27], hmac[28], hmac[29], hmac[30], hmac[31],
+			hmac[32], hmac[33], hmac[34], hmac[35], hmac[36], hmac[37], hmac[38], hmac[39],
+			hmac[40], hmac[41], hmac[42], hmac[43], hmac[44], hmac[45], hmac[46], hmac[47],
+			hmac[48], hmac[49], hmac[50], hmac[51], hmac[52], hmac[53], hmac[54], hmac[55],
+			hmac[56], hmac[57], hmac[58], hmac[59], hmac[60], hmac[61], hmac[62], hmac[63]);
+	  grub_dprintf ("zfs", "expected hmac %016llx %016llx %016llx %016llx\n",
+			(unsigned long long) zc.zc_word[0],
+			(unsigned long long) zc.zc_word[1],
+			(unsigned long long) zc.zc_word[2],
+			(unsigned long long) zc.zc_word[3]);
+	  return grub_error (GRUB_ERR_BAD_FS, N_("HMAC verification failed"));
+	}
+    }
+
   if (datto_dnode_encryption && (!grub_zfs_decrypt || !data->subvol.key_datto.master_key))
     {
       grub_dprintf("zfs", "Skipping decrypt of bonus because of missing zfscrypt module or key");
