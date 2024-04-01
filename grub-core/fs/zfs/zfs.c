@@ -1994,7 +1994,7 @@ add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp)
  * and put the uncompressed data in buf.
  */
 static grub_err_t
-zio_read (blkptr_t *bp, dnode_end_t *dn, grub_zfs_endian_t endian, void **buf,
+zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 	  grub_size_t *size, struct grub_zfs_data *data)
 {
   grub_size_t lsize, psize;
@@ -2013,17 +2013,20 @@ zio_read (blkptr_t *bp, dnode_end_t *dn, grub_zfs_endian_t endian, void **buf,
     {
       if (data->subvol.is_datto_encrypted)
 	{
-	  if (dn == NULL)
+	  grub_uint8_t type = BP_GET_TYPE(bp);
+	  if (BP_GET_LEVEL(bp) > 0)
 	    datto_authenticated = 1;
-	  else if (dn->dn.dn_type == DMU_OT_DNODE)
+	  else if (type == DMU_OT_DNODE)
 	    {
 	      datto_encrypted = 1;
 	      datto_authenticated = 0;
 	      datto_dnode_encryption = 1;
 	    }
+	  else if (type == DMU_OT_OBJSET)
+	    ;
 	  else
 	    {
-	      datto_encrypted = datto_is_encrypted_type(dn->dn.dn_type);
+	      datto_encrypted = datto_is_encrypted_type(type);
 	      datto_authenticated = !datto_encrypted;
 	    }
 	}
@@ -2091,7 +2094,7 @@ zio_read (blkptr_t *bp, dnode_end_t *dn, grub_zfs_endian_t endian, void **buf,
     {
       err = zio_checksum_verify (zc, checksum, endian,
 			         compbuf, psize,
-				 (datto_authenticated && (dn == NULL ||dn->dn.dn_type == DMU_OT_MASTER_NODE)));
+				 datto_authenticated);
       if (err)
         {
           grub_dprintf ("zfs", "incorrect checksum\n");
@@ -2320,12 +2323,12 @@ dmu_read (dnode_end_t * dn, grub_uint64_t blkid, void **buf,
       if (level == 0)
 	{
 	  grub_dprintf ("zfs", "endian = %d\n", endian);
-	  err = zio_read (bp, dn, endian, buf, 0, data);
+	  err = zio_read (bp, endian, buf, 0, data);
 	  endian = (grub_zfs_to_cpu64 (bp->blk_prop, endian) >> 63) & 1;
 	  break;
 	}
       grub_dprintf ("zfs", "endian = %d\n", endian);
-      err = zio_read (bp, NULL, endian, &tmpbuf, 0, data);
+      err = zio_read (bp, endian, &tmpbuf, 0, data);
       endian = (grub_zfs_to_cpu64 (bp->blk_prop, endian) >> 63) & 1;
       if (err)
 	break;
@@ -3245,7 +3248,7 @@ dnode_get_path (struct subvolume *subvol, const char *path_in, dnode_end_t *dn,
 	    {
 	      blkptr_t *bp = &dnode_path->dn.dn.dn_spill;
 
-	      err = zio_read (bp, &dnode_path->dn, dnode_path->dn.endian, &sahdrp, NULL, data);
+	      err = zio_read (bp, dnode_path->dn.endian, &sahdrp, NULL, data);
 	      if (err)
 	        break;
 	    }
@@ -3450,7 +3453,7 @@ make_mdn (dnode_end_t * mdn, struct grub_zfs_data *data)
   grub_dprintf ("zfs", "endian = %d\n", mdn->endian);
 
   bp = &(((dsl_dataset_phys_t *) DN_BONUS (&mdn->dn))->ds_bp);
-  err = zio_read (bp, mdn, mdn->endian, (void **) &osp, &ospsize, data);
+  err = zio_read (bp, mdn->endian, (void **) &osp, &ospsize, data);
   if (err)
     return err;
   if (ospsize < OBJSET_PHYS_SIZE_V14)
@@ -4046,7 +4049,7 @@ zfs_mount (grub_device_t dev)
 				  GRUB_ZFS_LITTLE_ENDIAN) == UBERBLOCK_MAGIC
 	       ? GRUB_ZFS_LITTLE_ENDIAN : GRUB_ZFS_BIG_ENDIAN);
 
-  err = zio_read (&ub->ub_rootbp, NULL, ub_endian,
+  err = zio_read (&ub->ub_rootbp, ub_endian,
 		  (void **) &osp, &ospsize, data);
   if (err)
     {
@@ -4215,7 +4218,7 @@ grub_zfs_open (struct grub_file *file, const char *fsfilename)
 	{
 	  blkptr_t *bp = &data->dnode.dn.dn_spill;
 
-	  err = zio_read (bp, &data->dnode, data->dnode.endian, &sahdrp, NULL, data);
+	  err = zio_read (bp, data->dnode.endian, &sahdrp, NULL, data);
 	  if (err)
 	    return err;
 	}
@@ -4423,7 +4426,7 @@ fill_fs_info (struct grub_dirhook_info *info,
 	{
 	  blkptr_t *bp = &dn.dn.dn_spill;
 
-	  err = zio_read (bp, &dn, dn.endian, &sahdrp, NULL, data);
+	  err = zio_read (bp, dn.endian, &sahdrp, NULL, data);
 	  if (err)
 	    return err;
 	}
@@ -4476,7 +4479,7 @@ iterate_zap (const char *name, grub_uint64_t val, struct grub_zfs_dir_ctx *ctx)
 	{
 	  blkptr_t *bp = &dn.dn.dn_spill;
 
-	  err = zio_read (bp, &dn, dn.endian, &sahdrp, NULL, ctx->data);
+	  err = zio_read (bp, dn.endian, &sahdrp, NULL, ctx->data);
 	  if (err)
 	    {
 	      grub_print_error ();
