@@ -167,7 +167,7 @@ struct grub_zfs_decryptor
 			       const grub_uint32_t *nonce, grub_uint64_t salt,
 			       char *buf, grub_size_t size,
 			       char *aadbuf, grub_size_t aadsize,
-			       const grub_uint32_t *expected_mac,
+			       const grub_uint64_t *expected_mac,
 			       grub_zfs_endian_t endian);
 
   struct grub_zfs_datto_key (*load_key_datto) (const grub_uint8_t *iv, grub_size_t ivlen,

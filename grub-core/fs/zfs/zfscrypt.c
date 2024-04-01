@@ -402,10 +402,10 @@ grub_zfs_decrypt_datto (const struct grub_zfs_datto_key *key,
 			const grub_uint32_t *nonce, grub_uint64_t salt,
 			char *buf, grub_size_t size,
 			char *aadbuf, grub_size_t aadsize,
-			const grub_uint32_t *expected_mac,
+			const grub_uint64_t *expected_mac,
 			grub_zfs_endian_t endian)
 {
-  grub_uint32_t mac[4];
+  grub_uint64_t mac[2];
   unsigned i;
   grub_uint8_t extractkey[64];
   grub_uint8_t expandkey[64];
@@ -447,15 +447,15 @@ grub_zfs_decrypt_datto (const struct grub_zfs_datto_key *key,
 		      (grub_uint8_t *) buf,
 		      (grub_uint8_t *) buf,
 		      size, (grub_uint8_t *) aadbuf, aadsize, mac,
-		      nonce, 12, 12);
+		      nonce, 12, 16);
   grub_crypto_cipher_close (cipher);
   if (err)
     return grub_crypto_gcry_error (err);
 
-  for (i = 0; i < 3; i++)
-    if (grub_zfs_to_cpu32 (expected_mac[i], endian)
-	!= grub_le_to_cpu32 (mac[i]))
-      return grub_error (GRUB_ERR_BAD_FS, N_("MAC verification failed"));
+  for (i = 0; i < 2; i++)
+    if (grub_zfs_to_cpu64 (expected_mac[i], endian)
+  	!= grub_le_to_cpu64 (mac[i]))
+      grub_dprintf("zfs", N_("MAC verification failed"));
   return GRUB_ERR_NONE;
 }
 

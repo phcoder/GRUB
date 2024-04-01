@@ -2216,7 +2216,7 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
 	  err = grub_zfs_decrypt->decrypt_datto (&data->subvol.key_datto,
 						 iv, (bp)->blk_dva[2].dva_word[0],
 						 crypt, crypt_offset, aad, aad_offset,
-						 (const grub_uint32_t *) &zc.zc_word[2],
+						 &zc.zc_word[2],
 						 endian);
 	  grub_size_t out_offset = 0;
 	  for (offset = 0; offset + sizeof (dnode_phys_t) <= psize; offset += sizeof(dnode_phys_t))
