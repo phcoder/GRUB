@@ -122,25 +122,75 @@ grub_zfs_add_key (grub_uint8_t *key_in,
 
 static gcry_err_code_t
 grub_ccm_decrypt (grub_crypto_cipher_handle_t cipher,
-		  grub_uint8_t *out, const grub_uint8_t *in,
-		  grub_size_t psize,
+		  grub_uint8_t *out,
+		  const grub_uint8_t *in, grub_size_t psize,
+		  const grub_uint8_t *aad, grub_size_t aadsize,
 		  void *mac_out, const void *nonce,
-		  unsigned l, unsigned m)
+		  unsigned noncelen, unsigned m)
 {
   grub_uint8_t iv[16];
   grub_uint8_t mul[16];
   grub_uint32_t mac[4];
-  unsigned i, j;
+  unsigned i, j, l = 15 - noncelen, aprefixlen = 0;
   gcry_err_code_t err;
+  grub_uint8_t aprefix[16];
 
-  grub_memcpy (iv + 1, nonce, 15 - l);
+  grub_memcpy (iv + 1, nonce, noncelen);
 
-  iv[0] = (l - 1) | (((m-2) / 2) << 3);
+  iv[0] = (l - 1) | (((m-2) / 2) << 3) | ((!!aadsize) << 6);
   for (j = 0; j < l; j++)
     iv[15 - j] = psize >> (8 * j);
   err = grub_crypto_ecb_encrypt (cipher, mac, iv, 16);
   if (err)
     return err;
+
+  if (aadsize == 0)
+    aprefixlen = 0;
+  else if (aadsize <= 0xFEFF)
+    {
+      aprefixlen = 2;
+      aprefix[0] = aadsize >> 8;
+      aprefix[1] = aadsize;
+    }
+  else if ((aadsize >> 32) == 0)
+    {
+      aprefixlen = 6;
+      aprefix[0] = 0xff;
+      aprefix[1] = 0xfe;
+      grub_set_unaligned32(aprefix + 2, grub_cpu_to_be32(aadsize));
+    }
+  else
+    {
+      aprefixlen = 10;
+      aprefix[0] = 0xff;
+      aprefix[1] = 0xff;
+      grub_set_unaligned64(aprefix + 2, grub_cpu_to_be64(aadsize));
+    }
+
+  if (aadsize != 0)
+    {
+      grub_memset(aprefix + aprefixlen, 0, 16 - aprefixlen);
+      grub_size_t ablocks = (aadsize + aprefixlen + 15) / 16;
+      grub_size_t first_block_datalen = 16 - aprefixlen;
+      if (first_block_datalen > aadsize)
+	first_block_datalen = aadsize;
+      grub_memcpy (aprefix + aprefixlen, aad, first_block_datalen);
+
+      grub_crypto_xor (mac, mac, aprefix, 16);
+      err = grub_crypto_ecb_encrypt (cipher, mac, mac, 16);
+      if (err)
+	return err;
+
+      for (i = 1; i < ablocks; i++)
+	{
+	  grub_size_t csize, instart = (i - 1) * 16 + first_block_datalen;
+	  csize = 16;
+	  if (csize > aadsize - instart)
+	    csize = aadsize - instart;
+	  grub_crypto_xor (mac, mac, aad + instart, csize);
+	  err = grub_crypto_ecb_encrypt (cipher, mac, mac, 16);
+	}
+    }
 
   iv[0] = l - 1;
 
@@ -300,7 +350,8 @@ algo_decrypt (grub_crypto_cipher_handle_t cipher, grub_uint64_t algo,
     {
     case GRUB_ZFS_ALGO_CCM:
       return grub_ccm_decrypt (cipher, out, in, psize,
-			       mac_out, nonce, l <= 15 ? 15 - l : 0, m);
+			       aad, aadsize, mac_out, nonce,
+			       l <= 15 ? l : 0, m);
     case GRUB_ZFS_ALGO_GCM:
       return grub_gcm_decrypt (cipher, out, in, psize,
 			       aad, aadsize, mac_out, nonce,
