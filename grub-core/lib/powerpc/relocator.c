@@ -53,7 +53,7 @@ grub_cpu_relocator_init (void)
 }
 
 void
-grub_cpu_relocator_preamble (void *rels)
+grub_cpu_relocator_preamble (void *rels __attribute__((unused)))
 {
 }
 
