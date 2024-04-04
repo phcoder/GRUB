@@ -481,6 +481,8 @@ const gcry_md_spec_t *
 grub_crypto_lookup_md_by_name (const char *name);
 const gcry_md_spec_t *
 grub_crypto_lookup_md_by_algo (int algo);
+const gcry_md_spec_t *
+grub_crypto_lookup_md_by_oid (const char *oid);
 
 grub_err_t
 grub_crypto_gcry_error (gcry_err_code_t in);

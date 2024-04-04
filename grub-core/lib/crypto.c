@@ -202,6 +202,32 @@ grub_crypto_lookup_md_by_name (const char *name)
     }
 }
 
+const gcry_md_spec_t *
+grub_crypto_lookup_md_by_oid (const char *oid)
+{
+  const gcry_md_spec_t *md;
+
+  if (!oid)
+    return NULL;
+
+  if (grub_strncmp (oid, "oid.", 4) == 0 || grub_strncmp (oid, "OID.", 4) == 0)
+    oid += 4;
+
+
+  for (md = grub_digests; md; md = md->next)
+    {
+      const gcry_md_oid_spec_t *oid_specs = md->oids;
+      if (oid_specs)
+        {
+          for (int j = 0; oid_specs[j].oidstring; j++)
+            if (grub_strcasecmp (oid, oid_specs[j].oidstring) == 0)
+              return md;
+        }
+    }
+
+  return NULL;
+}
+
 static const char *md_algos[] = {
     [1] = "MD5",
     [2] = "SHA1",

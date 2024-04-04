@@ -39,6 +39,28 @@ static byte *md_read( gcry_md_hd_t a, int algo );
 ///static int md_get_algo( gcry_md_hd_t a );
 static int md_digest_length( int algo );
 
+int
+_gcry_md_map_name (const char *string)
+{
+  const gcry_md_spec_t *spec;
+
+  if (!string)
+    return 0;
+
+  /* If the string starts with a digit (optionally prefixed with
+     either "OID." or "oid."), we first look into our table of ASN.1
+     object identifiers to figure out the algorithm */
+  spec = grub_crypto_lookup_md_by_oid (string);
+  if (spec)
+    return spec->algo;
+
+  /* Not found, search a matching digest name.  */
+  spec = grub_crypto_lookup_md_by_name (string);
+  if (spec)
+    return spec->algo;
+
+  return 0;
+}
 
 static gcry_err_code_t
 check_digest_algo (int algorithm)
