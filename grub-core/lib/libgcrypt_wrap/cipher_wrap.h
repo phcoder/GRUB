@@ -72,8 +72,6 @@ _gcry_fips_mode (void)
 
 #define gcry_mpi_mod _gcry_mpi_mod
 
-#define gpg_strerror gcry_strerror
-
 #define strtol grub_strtol
 #define strtoul grub_strtoul
 #define atoi(nptr) (strtol((nptr), NULL, 10))

@@ -183,3 +183,28 @@ gpg_err_code_from_syserror (void)
 {
   return gpg_error_from_syserror ();
 }
+
+void _gcry_fatal_error(int rc, const char *text )
+{
+  grub_fatal("gcry fatal %d: %s", rc, text);
+}
+
+
+void _gcry_randomize (void *buffer __attribute__((unused)), size_t length __attribute__((unused)),
+                      enum gcry_random_level level __attribute__((unused)))
+{
+  grub_fatal("Attempt to get secure random numbers");
+}
+
+
+void *_gcry_random_bytes_secure (size_t nbytes __attribute__((unused)), enum gcry_random_level level __attribute__((unused)))
+{
+  grub_fatal("Attempt to get secure random numbers");
+}
+
+const char *gpg_strerror (gpg_error_t err)
+{
+  static char buf[256];
+  grub_snprintf(buf, sizeof(buf) - 5, "gpg error %d\n", err);
+  return buf;
+}

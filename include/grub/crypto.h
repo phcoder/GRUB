@@ -589,5 +589,5 @@ gpg_error_t      gpgrt_b64dec_proc (gpgrt_b64state_t state,
 				    void *buffer, grub_size_t length,
                                     grub_size_t *r_nbytes);
 gpg_error_t      gpgrt_b64dec_finish (gpgrt_b64state_t state);
-
+const char *gpg_strerror (gpg_error_t err);
 #endif
