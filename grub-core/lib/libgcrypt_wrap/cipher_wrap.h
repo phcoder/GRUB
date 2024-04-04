@@ -74,4 +74,7 @@ _gcry_fips_mode (void)
 
 #define gpg_strerror gcry_strerror
 
+#define strtol grub_strtol
+#define strtoul grub_strtoul
+
 #endif

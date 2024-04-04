@@ -115,8 +115,8 @@ cryptolist.write ("CRC64: crc64\n");
 extra_files = {
     "gcry_camellia": ["camellia.c"], # Main file is camellia-glue.c
     "gcry_sha512"  : ["hash-common.c"],
-} 
-extra_files_list = [x for xs in extra_files.values() for x in xs]
+}
+extra_files_list = [x for xs in extra_files.values() for x in xs] + ["pubkey-util.c"]
 
 for cipher_file in cipher_files:
     infile = os.path.join (cipher_dir_in, cipher_file)
@@ -125,7 +125,7 @@ for cipher_file in cipher_files:
         continue
     chlognew = "	* %s" % cipher_file
     # Unused generic support files
-    if re.match ("(Makefile\.am|md\.c|cipher\.c|cipher-.*\.c|mac-.*\.c|mac\.c|pubkey\.c|pubkey-util\.c)$", cipher_file):
+    if re.match ("(Makefile\.am|md\.c|cipher\.c|cipher-.*\.c|mac-.*\.c|mac\.c|pubkey\.c)$", cipher_file):
         chlog = "%s%s: Removed\n" % (chlog, chlognew)
         continue
     # TODO: Support KDF
@@ -247,7 +247,7 @@ for cipher_file in cipher_files:
                 hold = False
                 # We're optimising for size and exclude anything needing good
                 # randomness.
-                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set)", line) is not None:
+                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_rsa_oaep_encode|_gcry_pk_util_data_to_mpi|pss_verify_cmp)", line) is not None:
 
                     skip = 1
                     if not re.match ("selftest", line) is None and cipher_file == "idea.c":
@@ -387,7 +387,7 @@ for cipher_file in cipher_files:
                     nch = True
                 continue
 
-            m = re.match ("((static )?const char( |)\*|static gpg_err_code_t|void|static int|static gcry_err_code_t|static gcry_mpi_t|static void|void|static elliptic_curve_t) *$", line)
+            m = re.match ("((static )?const char( |)\*|static gpg_err_code_t|void|static int|(static )?gcry_err_code_t|static gcry_mpi_t|static void|void|static elliptic_curve_t) *$", line)
             if not m is None:
                 hold = True
                 holdline = line

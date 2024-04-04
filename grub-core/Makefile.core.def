@@ -2545,6 +2545,14 @@ module = {
 };
 
 module = {
+  name = pubkey;
+  common = lib/libgcrypt-grub/cipher/pubkey-util.c;
+
+  cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
+  cppflags = '$(CPPFLAGS_GCRY)';
+};
+
+module = {
   name = all_video;
   common = lib/fake_module.c;
 };
