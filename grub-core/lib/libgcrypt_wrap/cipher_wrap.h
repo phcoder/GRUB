@@ -80,4 +80,6 @@ _gcry_fips_mode (void)
 
 #define stpcpry grub_stpcpy
 
+#define spec_from_algo grub_crypto_lookup_md_by_algo
+
 #endif

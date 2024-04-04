@@ -2540,6 +2540,7 @@ module = {
   common = lib/libgcrypt-grub/mpi/mpi-scan.c;
   common = lib/libgcrypt-grub/src/const-time.c;
   common = lib/libgcrypt_wrap/mem.c;
+  common = lib/libgcrypt_wrap/md.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
   cppflags = '$(CPPFLAGS_GCRY)';

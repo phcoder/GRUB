@@ -202,6 +202,65 @@ grub_crypto_lookup_md_by_name (const char *name)
     }
 }
 
+static const char *md_algos[] = {
+    [1] = "MD5",
+    [2] = "SHA1",
+    [3] = "RIPEMD160",
+    [6] = "TIGER",
+    [8] = "SHA256",
+    [9] = "SHA384",
+    [10] = "SHA512",
+    [11] = "SHA224",
+
+    [301] = "MD4",
+    [302] = "CRC32",
+    [303] = "CRC32RFC1510",
+    [304] = "CRC24RFC2440",
+    [305] = "WHIRLPOOL",
+    [306] = "TIGER1",
+    [307] = "TIGER2",
+    [308] = "GOSTR3411_94",
+    [309] = "STRIBOG256",
+    [310] = "STRIBOG512",
+    [311] = "GOSTR3411_CP",
+    [312] = "SHA3-224",
+    [313] = "SHA3-256",
+    [314] = "SHA3-384",
+    [315] = "SHA3-512",
+    [316] = "SHAKE128",
+    [317] = "SHAKE256",
+    [318] = "BLAKE2B_512",
+    [319] = "BLAKE2B_384",
+    [320] = "BLAKE2B_256",
+    [321] = "BLAKE2B_160",
+    [322] = "BLAKE2S_256",
+    [323] = "BLAKE2S_224",
+    [324] = "BLAKE2S_160",
+    [325] = "BLAKE2S_128",
+    [326] = "SM3",
+    [327] = "SHA512_256",
+    [328] = "SHA512_224",
+};
+
+
+const gcry_md_spec_t *
+grub_crypto_lookup_md_by_algo (int algo)
+{
+  const gcry_md_spec_t *md;
+  int first = 1;
+  while (1)
+    {
+      for (md = grub_digests; md; md = md->next)
+	if (algo == md->algo)
+	  return md;
+      if (grub_crypto_autoload_hook && first && algo > 0 && algo < (int)ARRAY_SIZE(md_algos) && md_algos[algo]) {
+	grub_crypto_autoload_hook (md_algos[algo]);
+      } else
+	return NULL;
+      first = 0;
+    }
+}
+
 const gcry_cipher_spec_t *
 grub_crypto_lookup_cipher_by_name (const char *name)
 {

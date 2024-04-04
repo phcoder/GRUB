@@ -479,6 +479,8 @@ grub_crypto_hash (const gcry_md_spec_t *hash, void *out, const void *in,
 		  grub_size_t inlen);
 const gcry_md_spec_t *
 grub_crypto_lookup_md_by_name (const char *name);
+const gcry_md_spec_t *
+grub_crypto_lookup_md_by_algo (int algo);
 
 grub_err_t
 grub_crypto_gcry_error (gcry_err_code_t in);
