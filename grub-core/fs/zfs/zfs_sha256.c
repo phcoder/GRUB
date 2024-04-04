@@ -109,7 +109,7 @@ SHA256Transform(grub_uint32_t *H, const grub_uint8_t *cp)
 
 void
 zio_checksum_SHA256(const void *buf, grub_uint64_t size,
-		    grub_zfs_endian_t endian, zio_cksum_t *zcp)
+		    grub_zfs_endian_t endian __attribute__((unused)), zio_cksum_t *zcp)
 {
   grub_uint32_t H[8] = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
 			 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 };
@@ -132,12 +132,8 @@ zio_checksum_SHA256(const void *buf, grub_uint64_t size,
   for (i = 0; i < padsize && i <= 64; i += 64)
     SHA256Transform(H, pad + i);
 
-  zcp->zc_word[0] = grub_cpu_to_zfs64 ((grub_uint64_t)H[0] << 32 | H[1],
-				       endian);
-  zcp->zc_word[1] = grub_cpu_to_zfs64 ((grub_uint64_t)H[2] << 32 | H[3],
-				       endian);
-  zcp->zc_word[2] = grub_cpu_to_zfs64 ((grub_uint64_t)H[4] << 32 | H[5],
-				       endian);
-  zcp->zc_word[3] = grub_cpu_to_zfs64 ((grub_uint64_t)H[6] << 32 | H[7],
-				       endian);
+  zcp->zc_word[0] = (grub_uint64_t)H[0] << 32 | H[1];
+  zcp->zc_word[1] = (grub_uint64_t)H[2] << 32 | H[3];
+  zcp->zc_word[2] = (grub_uint64_t)H[4] << 32 | H[5];
+  zcp->zc_word[3] = (grub_uint64_t)H[6] << 32 | H[7];
 }

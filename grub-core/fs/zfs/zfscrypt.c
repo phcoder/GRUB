@@ -277,7 +277,7 @@ algo_decrypt (grub_crypto_cipher_handle_t cipher, grub_uint64_t algo,
 static grub_err_t
 grub_zfs_decrypt_real (grub_crypto_cipher_handle_t cipher,
 		       grub_uint64_t algo,
-		       void *nonce,
+		       const void *nonce,
 		       char *buf, grub_size_t size,
 		       const grub_uint32_t *expected_mac,
 		       grub_zfs_endian_t endian)

@@ -33,6 +33,14 @@ typedef enum grub_zfs_endian
     GRUB_ZFS_BIG_ENDIAN = 0
   } grub_zfs_endian_t;
 
+#ifdef GRUB_CPU_WORDS_BIGENDIAN
+#define GRUB_ZFS_IS_NATIVE_BYTEORDER(x) ((x) == GRUB_ZFS_BIG_ENDIAN)
+#define GRUB_ZFS_NATIVE_ENDIAN GRUB_ZFS_BIG_ENDIAN
+#else
+#define GRUB_ZFS_IS_NATIVE_BYTEORDER(x) ((x) != GRUB_ZFS_BIG_ENDIAN)
+#define GRUB_ZFS_NATIVE_ENDIAN GRUB_ZFS_LITTLE_ENDIAN
+#endif
+
 /*
  * On-disk version number.
  */
@@ -141,7 +149,7 @@ grub_zfs_add_key (grub_uint8_t *key_in,
 
 extern grub_err_t (*grub_zfs_decrypt) (grub_crypto_cipher_handle_t cipher,
 				       grub_uint64_t algo,
-				       void *nonce,
+				       const void *nonce,
 				       char *buf, grub_size_t size,
 				       const grub_uint32_t *expected_mac,
 				       grub_zfs_endian_t endian);

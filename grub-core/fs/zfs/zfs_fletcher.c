@@ -54,10 +54,10 @@ fletcher_2(const void *buf, grub_uint64_t size, grub_zfs_endian_t endian,
       b1 += a1;
     }
 
-  zcp->zc_word[0] = grub_cpu_to_zfs64 (a0, endian);
-  zcp->zc_word[1] = grub_cpu_to_zfs64 (a1, endian);
-  zcp->zc_word[2] = grub_cpu_to_zfs64 (b0, endian);
-  zcp->zc_word[3] = grub_cpu_to_zfs64 (b1, endian);
+  zcp->zc_word[0] = a0;
+  zcp->zc_word[1] = a1;
+  zcp->zc_word[2] = b0;
+  zcp->zc_word[3] = b1;
 }
 
 void
@@ -70,15 +70,15 @@ fletcher_4 (const void *buf, grub_uint64_t size, grub_zfs_endian_t endian,
 
   for (a = b = c = d = 0; ip < ipend; ip++)
     {
-      a += grub_zfs_to_cpu32 (ip[0], endian);;
+      a += grub_zfs_to_cpu32 (ip[0], endian);
       b += a;
       c += b;
       d += c;
     }
 
-  zcp->zc_word[0] = grub_cpu_to_zfs64 (a, endian);
-  zcp->zc_word[1] = grub_cpu_to_zfs64 (b, endian);
-  zcp->zc_word[2] = grub_cpu_to_zfs64 (c, endian);
-  zcp->zc_word[3] = grub_cpu_to_zfs64 (d, endian);
+  zcp->zc_word[0] = a;
+  zcp->zc_word[1] = b;
+  zcp->zc_word[2] = c;
+  zcp->zc_word[3] = d;
 }
 
