@@ -37,6 +37,10 @@ struct grub_crypto_hmac_handle
 static gcry_cipher_spec_t *grub_ciphers = NULL;
 static gcry_md_spec_t *grub_digests = NULL;
 
+int _gcry_no_fips_mode_required;
+volatile unsigned int _gcry_ct_vzero = 0;
+volatile unsigned int _gcry_ct_vone = 1;
+
 void (*grub_crypto_autoload_hook) (const char *name) = NULL;
 
 /* Based on libgcrypt-1.4.4/src/misc.c.  */
@@ -56,12 +60,29 @@ _gcry_burn_stack (int size)
   grub_burn_stack (size);
 }
 
+void
+__gcry_burn_stack (unsigned int size)
+{
+  grub_burn_stack (size);
+}
+
+void
+__gcry_burn_stack_dummy (void)
+{
+}
+
 void __attribute__ ((noreturn))
 _gcry_assert_failed (const char *expr, const char *file, int line,
 		     const char *func)
 
 {
   grub_fatal ("assertion %s at %s:%d (%s) failed\n", expr, file, line, func);
+}
+
+void
+_gcry_bug( const char *file, int line, const char *func )
+{
+    grub_fatal ("... this is a bug (%s:%d:%s)\n", file, line, func);
 }
 
 
@@ -81,6 +102,36 @@ void _gcry_log_error (const char *fmt, ...)
       va_end (args);
       grub_refresh ();
     }
+}
+
+void _gcry_log_info (const char *fmt, ...)
+{
+  va_list args;
+  const char *debug = grub_env_get ("debug");
+
+  if (! debug)
+    return;
+
+  if (grub_strword (debug, "all") || grub_strword (debug, "gcrypt"))
+    {
+      grub_printf ("gcrypt info: ");
+      va_start (args, fmt);
+      grub_vprintf (fmt, args);
+      va_end (args);
+      grub_refresh ();
+    }
+}
+
+void
+_gcry_fast_wipememory2 (void *ptr, int set, grub_size_t len)
+{
+  grub_memset(ptr, set, len);
+}
+
+void
+_gcry_fast_wipememory (void *ptr, grub_size_t len)
+{
+  grub_memset(ptr, 0, len);
 }
 
 void
@@ -129,7 +180,7 @@ grub_crypto_hash (const gcry_md_spec_t *hash, void *out, const void *in,
 
   if (hash->contextsize > sizeof (ctx))
     grub_fatal ("Too large md context");
-  hash->init (&ctx);
+  hash->init (&ctx, 0);
   hash->write (&ctx, in, inlen);
   hash->final (&ctx);
   grub_memcpy (out, hash->read (&ctx), hash->mdlen);
@@ -196,7 +247,9 @@ grub_crypto_cipher_set_key (grub_crypto_cipher_handle_t cipher,
 			    const unsigned char *key,
 			    unsigned keylen)
 {
-  return cipher->cipher->setkey (cipher->ctx, key, keylen);
+  /* TODO: Fix this. It's ugly as hell.  */
+  void *bulk_ops[100];
+  return cipher->cipher->setkey (cipher->ctx, key, keylen, (void *) bulk_ops);
 }
 
 gcry_err_code_t
@@ -343,7 +396,7 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
   grub_free (helpkey);
   helpkey = NULL;
 
-  md->init (ctx);
+  md->init (ctx, 0);
 
   md->write (ctx, ipad, md->blocksize); /* inner pad */
   grub_memset (ipad, 0, md->blocksize);
@@ -390,7 +443,7 @@ grub_crypto_hmac_fini (struct grub_crypto_hmac_handle *hnd, void *out)
   hnd->md->read (hnd->ctx);
   p = hnd->md->read (hnd->ctx);
 
-  hnd->md->init (ctx2);
+  hnd->md->init (ctx2, 0);
   hnd->md->write (ctx2, hnd->opad, hnd->md->blocksize);
   hnd->md->write (ctx2, p, hnd->md->mdlen);
   hnd->md->final (ctx2);
@@ -433,19 +486,123 @@ grub_crypto_gcry_error (gcry_err_code_t in)
   return GRUB_ACCESS_DENIED;
 }
 
+
+/*
+ * Compare byte arrays of length LEN, return 1 if it's not same,
+ * 0, otherwise.
+ */
+unsigned int
+_gcry_ct_not_memequal (const void *b1, const void *b2, grub_size_t len)
+{
+  const grub_uint8_t *a = b1;
+  const grub_uint8_t *b = b2;
+  int ab, ba;
+  grub_size_t i;
+
+  /* Constant-time compare. */
+  for (i = 0, ab = 0, ba = 0; i < len; i++)
+    {
+      /* If a[i] != b[i], either ab or ba will be negative. */
+      ab |= a[i] - b[i];
+      ba |= b[i] - a[i];
+    }
+
+  /* 'ab | ba' is negative when buffers are not equal, extract sign bit.  */
+  return ((unsigned int)(ab | ba) >> (sizeof(unsigned int) * 8 - 1)) & 1;
+}
+
+/*
+ * Compare byte arrays of length LEN, return 0 if it's not same,
+ * 1, otherwise.
+ */
+unsigned int
+_gcry_ct_memequal (const void *b1, const void *b2, grub_size_t len)
+{
+  return _gcry_ct_not_memequal (b1, b2, len) ^ 1;
+}
+
+
 int
 grub_crypto_memcmp (const void *a, const void *b, grub_size_t n)
 {
-  register grub_size_t counter = 0;
-  const grub_uint8_t *pa, *pb;
+  return _gcry_ct_not_memequal(a, b, n);
+}
 
-  for (pa = a, pb = b; n; pa++, pb++, n--)
-    {
-      if (*pa != *pb)
-	counter++;
-    }
 
-  return !!counter;
+void *
+_gcry_malloc_secure (grub_size_t n)
+{
+  return grub_malloc(n);
+}
+
+void *
+_gcry_malloc (grub_size_t n)
+{
+  return grub_malloc(n);
+}
+
+void *
+_gcry_xmalloc(grub_size_t n)
+{
+  void *ret = grub_malloc(n);
+  if (ret == NULL)
+    grub_fatal("_gcry_xmalloc failed");
+  return ret;
+}
+
+void *
+_gcry_xmalloc_secure(grub_size_t n)
+{
+  void *ret = grub_malloc(n);
+  if (ret == NULL)
+    grub_fatal("_gcry_xmalloc_secure failed");
+  return ret;
+}
+
+void _gcry_free (void *p)
+{
+  grub_free (p);
+}
+
+void *
+_gcry_xrealloc (void *a, grub_size_t n)
+{
+  void *ret = grub_realloc(a, n);
+  if (ret == NULL)
+    grub_fatal("_gcry_xrealloc failed");
+  return ret;
+}
+
+void *
+_gcry_xcalloc (grub_size_t n, grub_size_t m)
+{
+  void *ret = grub_calloc(n, m);
+  if (ret == NULL)
+    grub_fatal("_gcry_xcalloc failed");
+  return ret;
+}
+
+void *
+_gcry_xcalloc_secure (grub_size_t n, grub_size_t m)
+{
+  void *ret = grub_calloc(n, m);
+  if (ret == NULL)
+    grub_fatal("_gcry_xcalloc_secure failed");
+  return ret;
+}
+
+
+int
+_gcry_is_secure (const void *a)
+{
+  (void) a;
+
+  return 0;
+}
+
+void _gcry_divide_by_zero (void)
+{
+  grub_fatal("gcrypt division by zero");
 }
 
 #ifndef GRUB_UTIL
