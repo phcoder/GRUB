@@ -196,7 +196,7 @@ free_pk (struct grub_public_key *pk)
       grub_size_t i;
       for (i = 0; i < ARRAY_SIZE (sk->mpis); i++)
 	if (sk->mpis[i])
-	  gcry_mpi_release (sk->mpis[i]);
+	  _gcry_mpi_release (sk->mpis[i]);
       nsk = sk->next;
       grub_free (sk);
     }
@@ -336,7 +336,7 @@ grub_load_public_key (grub_file_t f)
 
 	  GRUB_MD_SHA1->write (fingerprint_context, buffer, lb + sizeof (grub_uint16_t));
 
-	  if (gcry_mpi_scan (&sk->mpis[i], GCRYMPI_FMT_PGP,
+	  if (_gcry_mpi_scan (&sk->mpis[i], GCRYMPI_FMT_PGP,
 			     buffer, lb + sizeof (grub_uint16_t), 0))
 	    {
 	      grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
@@ -399,10 +399,10 @@ static int
 dsa_pad (gcry_mpi_t *hmpi, grub_uint8_t *hval,
 	 const gcry_md_spec_t *hash, struct grub_public_subkey *sk)
 {
-  unsigned nbits = gcry_mpi_get_nbits (sk->mpis[1]);
+  unsigned nbits = _gcry_mpi_get_nbits (sk->mpis[1]);
   grub_dprintf ("crypt", "must be %u bits got %d bits\n", nbits,
 		(int)(8 * hash->mdlen));
-  return gcry_mpi_scan (hmpi, GCRYMPI_FMT_USG, hval,
+  return _gcry_mpi_scan (hmpi, GCRYMPI_FMT_USG, hval,
 			nbits / 8 < (unsigned) hash->mdlen ? nbits / 8
 			: (unsigned) hash->mdlen, 0);
 }
@@ -413,7 +413,7 @@ rsa_pad (gcry_mpi_t *hmpi, grub_uint8_t *hval,
 {
   grub_size_t tlen, emlen, fflen;
   grub_uint8_t *em, *emptr;
-  unsigned nbits = gcry_mpi_get_nbits (sk->mpis[0]);
+  unsigned nbits = _gcry_mpi_get_nbits (sk->mpis[0]);
   int ret;
   tlen = hash->mdlen + hash->asnlen;
   emlen = (nbits + 7) / 8;
@@ -434,7 +434,7 @@ rsa_pad (gcry_mpi_t *hmpi, grub_uint8_t *hval,
   emptr += hash->asnlen;
   grub_memcpy (emptr, hval, hash->mdlen);
 
-  ret = gcry_mpi_scan (hmpi, GCRYMPI_FMT_USG, em, emlen, 0);
+  ret = _gcry_mpi_scan (hmpi, GCRYMPI_FMT_USG, em, emlen, 0);
   grub_free (em);
   return ret;
 }
@@ -620,7 +620,7 @@ grub_verify_signature_real (struct grub_pubkey_context *ctxt,
       grub_memcpy (readbuf, &l, sizeof (l));
       grub_dprintf ("crypt", "alive\n");
 
-      if (gcry_mpi_scan (&mpis[i], GCRYMPI_FMT_PGP,
+      if (_gcry_mpi_scan (&mpis[i], GCRYMPI_FMT_PGP,
 			 readbuf, lb + sizeof (grub_uint16_t), 0))
 	goto fail;
       grub_dprintf ("crypt", "alive\n");
