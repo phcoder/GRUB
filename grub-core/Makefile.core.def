@@ -2551,6 +2551,7 @@ module = {
   common = lib/libgcrypt-grub/cipher/pubkey-util.c;
   common = lib/libgcrypt-grub/cipher/rsa-common.c;
   common = lib/libgcrypt-grub/src/sexp.c;
+  common = lib/b64dec.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
   cppflags = '$(CPPFLAGS_GCRY)';

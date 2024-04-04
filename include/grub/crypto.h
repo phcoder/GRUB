@@ -88,6 +88,7 @@ typedef enum
     GPG_ERR_SEXP_BAD_HEX_CHAR,
     GPG_ERR_LIMIT_REACHED,
     GPG_ERR_EOF,
+    GPG_ERR_BAD_DATA,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
