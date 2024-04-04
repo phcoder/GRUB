@@ -89,6 +89,12 @@ gcry_xrealloc (void *a, size_t n)
   return ret;
 }
 
+void *
+_gcry_realloc (void *a, size_t n)
+{
+  return grub_realloc (a, n);
+}
+
 void
 _gcry_check_heap (const void *a __attribute__ ((unused)))
 {
