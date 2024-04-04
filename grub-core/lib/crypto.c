@@ -38,8 +38,6 @@ static gcry_cipher_spec_t *grub_ciphers = NULL;
 static gcry_md_spec_t *grub_digests = NULL;
 
 int _gcry_no_fips_mode_required;
-volatile unsigned int _gcry_ct_vzero = 0;
-volatile unsigned int _gcry_ct_vone = 1;
 
 void (*grub_crypto_autoload_hook) (const char *name) = NULL;
 
@@ -491,8 +489,8 @@ grub_crypto_gcry_error (gcry_err_code_t in)
  * Compare byte arrays of length LEN, return 1 if it's not same,
  * 0, otherwise.
  */
-unsigned int
-_gcry_ct_not_memequal (const void *b1, const void *b2, grub_size_t len)
+int
+grub_crypto_memcmp (const void *b1, const void *b2, grub_size_t len)
 {
   const grub_uint8_t *a = b1;
   const grub_uint8_t *b = b2;
@@ -509,23 +507,6 @@ _gcry_ct_not_memequal (const void *b1, const void *b2, grub_size_t len)
 
   /* 'ab | ba' is negative when buffers are not equal, extract sign bit.  */
   return ((unsigned int)(ab | ba) >> (sizeof(unsigned int) * 8 - 1)) & 1;
-}
-
-/*
- * Compare byte arrays of length LEN, return 0 if it's not same,
- * 1, otherwise.
- */
-unsigned int
-_gcry_ct_memequal (const void *b1, const void *b2, grub_size_t len)
-{
-  return _gcry_ct_not_memequal (b1, b2, len) ^ 1;
-}
-
-
-int
-grub_crypto_memcmp (const void *a, const void *b, grub_size_t n)
-{
-  return _gcry_ct_not_memequal(a, b, n);
 }
 
 

@@ -126,9 +126,9 @@ void _gcry_log_bug (const char *fmt, ...)
 }
 
 gcry_err_code_t
-gpg_error_from_syserror (void)
+gpg_err_code_from_errno (int err)
 {
-  switch (grub_errno)
+  switch (err)
     {
     case GRUB_ERR_NONE:
       return GPG_ERR_NO_ERROR;
@@ -137,6 +137,12 @@ gpg_error_from_syserror (void)
     default:
       return GPG_ERR_GENERAL;
     }
+}
+
+gcry_err_code_t
+gpg_error_from_syserror (void)
+{
+  return gpg_err_code_from_errno(grub_errno);
 }
 
 gcry_err_code_t

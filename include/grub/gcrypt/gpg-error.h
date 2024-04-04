@@ -32,4 +32,10 @@ gpg_error_from_syserror (void);
 gcry_err_code_t
 gpg_err_code_from_syserror (void);
 
+gcry_err_code_t
+gpg_error_from_errno (int err);
+
+gcry_err_code_t
+gpg_err_code_from_errno (int err);
+
 #endif

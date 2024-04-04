@@ -2538,6 +2538,7 @@ module = {
   common = lib/libgcrypt-grub/mpi/mpi-inline.c;
   common = lib/libgcrypt-grub/mpi/mpih-const-time.c;
   common = lib/libgcrypt-grub/mpi/mpi-scan.c;
+  common = lib/libgcrypt-grub/src/const-time.c;
   common = lib/libgcrypt_wrap/mem.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
@@ -2547,6 +2548,8 @@ module = {
 module = {
   name = pubkey;
   common = lib/libgcrypt-grub/cipher/pubkey-util.c;
+  common = lib/libgcrypt-grub/cipher/rsa-common.c;
+  common = lib/libgcrypt-grub/src/sexp.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
   cppflags = '$(CPPFLAGS_GCRY)';

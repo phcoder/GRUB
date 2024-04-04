@@ -71,6 +71,23 @@ typedef enum
     GPG_ERR_VALUE_NOT_FOUND,
     GPG_ERR_ERANGE,
     GPG_ERR_INV_DATA,
+    GPG_ERR_ENCODING_PROBLEM,
+    GPG_ERR_BUFFER_TOO_SHORT,
+    GPG_ERR_SYNTAX,
+    GPG_ERR_SEXP_INV_LEN_SPEC,
+    GPG_ERR_SEXP_UNMATCHED_DH,
+    GPG_ERR_SEXP_UNMATCHED_PAREN,
+    GPG_ERR_SEXP_ZERO_PREFIX,
+    GPG_ERR_SEXP_NESTED_DH,
+    GPG_ERR_SEXP_UNEXPECTED_PUNC,
+    GPG_ERR_SEXP_BAD_CHARACTER,
+    GPG_ERR_SEXP_NOT_CANONICAL,
+    GPG_ERR_SEXP_STRING_TOO_LONG,
+    GPG_ERR_SEXP_BAD_QUOTATION,
+    GPG_ERR_SEXP_ODD_HEX_NUMBERS,
+    GPG_ERR_SEXP_BAD_HEX_CHAR,
+    GPG_ERR_LIMIT_REACHED,
+    GPG_ERR_EOF,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
@@ -563,5 +580,12 @@ int
 grub_get_random (void *out, grub_size_t len);
 
 #endif
+
+typedef struct _gpgrt_b64state *gpgrt_b64state_t;
+gpgrt_b64state_t gpgrt_b64dec_start (const char *title);
+gpg_error_t      gpgrt_b64dec_proc (gpgrt_b64state_t state,
+				    void *buffer, grub_size_t length,
+                                    grub_size_t *r_nbytes);
+gpg_error_t      gpgrt_b64dec_finish (gpgrt_b64state_t state);
 
 #endif

@@ -76,5 +76,8 @@ _gcry_fips_mode (void)
 
 #define strtol grub_strtol
 #define strtoul grub_strtoul
+#define atoi(nptr) (strtol((nptr), NULL, 10))
+
+#define stpcpry grub_stpcpy
 
 #endif

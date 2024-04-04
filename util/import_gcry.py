@@ -62,6 +62,12 @@ confutil.write ("  cflags = '$(CFLAGS_GCRY)';\n");
 confutil.write ("  cppflags = '$(CPPFLAGS_GCRY)';\n");
 confutil.write ("  extra_dist = grub-core/lib/libgcrypt-grub/cipher/ChangeLog;\n");
 confutil.write ("\n");
+
+for src in ['src/const-time.c']:
+    confutil.write ("  common = grub-core/lib/libgcrypt-grub/%s;\n" % src)
+
+confutil.write ("\n");
+
 chlog = ""
 modules_sym_md = []
 
@@ -116,7 +122,7 @@ extra_files = {
     "gcry_camellia": ["camellia.c"], # Main file is camellia-glue.c
     "gcry_sha512"  : ["hash-common.c"],
 }
-extra_files_list = [x for xs in extra_files.values() for x in xs] + ["pubkey-util.c"]
+extra_files_list = [x for xs in extra_files.values() for x in xs] + ["pubkey-util.c", "rsa-common.c"]
 
 for cipher_file in cipher_files:
     infile = os.path.join (cipher_dir_in, cipher_file)
@@ -247,7 +253,7 @@ for cipher_file in cipher_files:
                 hold = False
                 # We're optimising for size and exclude anything needing good
                 # randomness.
-                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_rsa_oaep_encode|_gcry_pk_util_data_to_mpi|pss_verify_cmp)", line) is not None:
+                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set)", line) is not None:
 
                     skip = 1
                     if not re.match ("selftest", line) is None and cipher_file == "idea.c":
@@ -547,7 +553,7 @@ for src in sorted (os.listdir (os.path.join (indir, "src"))):
             or src == "libgcrypt.vers" or src == "Makefile.am" \
             or src == "Manifest" or src == "misc.c" \
             or src == "missing-string.c" or src == "module.c" \
-            or src == "secmem.c" or src == "sexp.c" \
+            or src == "secmem.c" \
             or src == "stdmem.c" or src == "visibility.c":
         continue
     outfile = os.path.join (basedir, "src", src)
@@ -577,6 +583,8 @@ for src in sorted (os.listdir (os.path.join (indir, "src"))):
         continue
 
     if src == "g10lib.h":
+        fw.write("#include <cipher_wrap.h>\n")
+        fw.write("#include <grub/crypto.h>\n")
         fw.write (f.read ().replace ("(printf,f,a)", "(__printf__,f,a)").replace ("#include \"../compat/libcompat.h\"", "").replace("#define N_(a) (a)", ""))
         f.close ()
         fw.close ()
