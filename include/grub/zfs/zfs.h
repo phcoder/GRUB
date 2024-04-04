@@ -147,20 +147,46 @@ grub_zfs_add_key (grub_uint8_t *key_in,
 		  grub_size_t keylen,
 		  int passphrase);
 
-extern grub_err_t (*grub_zfs_decrypt) (grub_crypto_cipher_handle_t cipher,
-				       grub_uint64_t algo,
-				       const void *nonce,
-				       char *buf, grub_size_t size,
-				       const grub_uint32_t *expected_mac,
-				       grub_zfs_endian_t endian);
+struct grub_zfs_key_oracle;
 
-struct grub_zfs_key;
+struct grub_zfs_datto_key
+{
+  grub_uint8_t *master_key;
+  grub_size_t master_keylen;
+  grub_uint8_t *hmac_key;
+  grub_uint64_t algo;
+};
 
-extern grub_crypto_cipher_handle_t (*grub_zfs_load_key) (const struct grub_zfs_key *key,
-							 grub_size_t keysize,
-							 grub_uint64_t salt,
-							 grub_uint64_t algo);
+struct grub_zfs_decryptor
+{
+  grub_err_t (*decrypt_oracle) (grub_crypto_cipher_handle_t cipher,
+				grub_uint64_t algo,
+				const void *nonce,
+				char *buf, grub_size_t size,
+				const grub_uint32_t *expected_mac,
+				grub_zfs_endian_t endian);
 
+  grub_crypto_cipher_handle_t (*load_key_oracle) (const struct grub_zfs_key_oracle *key,
+						  grub_size_t keysize,
+						  grub_uint64_t salt,
+						  grub_uint64_t algo);
+
+  grub_err_t (*decrypt_datto) (const struct grub_zfs_datto_key *key,
+			       const grub_uint32_t *nonce, grub_uint64_t salt,
+			       char *buf, grub_size_t size,
+			       const char *aadbuf, grub_size_t aadsize,
+			       const grub_uint64_t *expected_mac,
+			       grub_zfs_endian_t endian);
+
+  struct grub_zfs_datto_key (*load_key_datto) (const grub_uint8_t *iv, grub_size_t ivlen,
+					       const grub_uint8_t *mac, grub_size_t maclen,
+					       const grub_uint8_t *master, grub_size_t masterlen,
+					       const grub_uint8_t *hmac, grub_size_t hmaclen,
+					       const grub_uint8_t *pbkdf2salt, grub_size_t pbkdf2saltlen,
+					       grub_uint64_t pbkdf2iters, grub_uint64_t guid, grub_uint64_t algo, grub_uint64_t version);
+};
+
+extern struct grub_zfs_decryptor *grub_zfs_decrypt;
 
 
 #endif	/* ! GRUB_ZFS_HEADER */
