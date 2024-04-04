@@ -139,6 +139,106 @@ _gcry_md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
   return rc;
 }
 
+static gcry_err_code_t
+md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
+{
+  gcry_err_code_t err = 0;
+  struct gcry_md_context *a = ahd->ctx;
+  struct gcry_md_context *b;
+  GcryDigestEntry *ar, *br;
+  gcry_md_hd_t bhd;
+  size_t n;
+
+  if (ahd->bufpos)
+    md_write (ahd, NULL, 0);
+
+  n = (char *) ahd->ctx - (char *) ahd;
+  if (a->flags.secure)
+    bhd = xtrymalloc_secure (n + sizeof (struct gcry_md_context));
+  else
+    bhd = xtrymalloc (n + sizeof (struct gcry_md_context));
+
+  if (!bhd)
+    {
+      err = gpg_err_code_from_syserror ();
+      goto leave;
+    }
+
+  bhd->ctx = b = (void *) ((char *) bhd + n);
+  /* No need to copy the buffer due to the write above. */
+  gcry_assert (ahd->bufsize == (n - offsetof (struct gcry_md_handle, buf)));
+  bhd->bufsize = ahd->bufsize;
+  bhd->bufpos = 0;
+  gcry_assert (! ahd->bufpos);
+  memcpy (b, a, sizeof *a);
+  b->list = NULL;
+
+  /* Copy the complete list of algorithms.  The copied list is
+     reversed, but that doesn't matter. */
+  for (ar = a->list; ar; ar = ar->next)
+    {
+      if (a->flags.secure)
+        br = xtrymalloc_secure (ar->actual_struct_size);
+      else
+        br = xtrymalloc (ar->actual_struct_size);
+      if (!br)
+        {
+          err = gpg_err_code_from_syserror ();
+          md_close (bhd);
+          goto leave;
+        }
+
+      memcpy (br, ar, ar->actual_struct_size);
+      br->next = b->list;
+      b->list = br;
+    }
+
+  *b_hd = bhd;
+
+ leave:
+  return err;
+}
+
+gcry_err_code_t
+_gcry_md_copy (gcry_md_hd_t *handle, gcry_md_hd_t hd)
+{
+  gcry_err_code_t rc;
+
+  rc = md_copy (hd, handle);
+  if (rc)
+    *handle = NULL;
+  return rc;
+}
+
+
+/*
+ * Reset all contexts and discard any buffered stuff.  This may be used
+ * instead of a md_close(); md_open().
+ */
+void
+_gcry_md_reset (gcry_md_hd_t a)
+{
+  GcryDigestEntry *r;
+
+  /* Note: We allow this even in fips non operational mode.  */
+
+  a->bufpos = a->ctx->flags.finalized = 0;
+
+  if (a->ctx->flags.hmac)
+    for (r = a->ctx->list; r; r = r->next)
+      {
+        memcpy (r->context, (char *)r->context + r->spec->contextsize,
+                r->spec->contextsize);
+      }
+  else
+    for (r = a->ctx->list; r; r = r->next)
+      {
+        memset (r->context, 0, r->spec->contextsize);
+        (*r->spec->init) (r->context,
+                          a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0);
+      }
+}
+
 static void
 md_close (gcry_md_hd_t a)
 {
