@@ -37,7 +37,7 @@ static void md_close (gcry_md_hd_t a);
 static void md_write (gcry_md_hd_t a, const void *inbuf, size_t inlen);
 static byte *md_read( gcry_md_hd_t a, int algo );
 ///static int md_get_algo( gcry_md_hd_t a );
-///static int md_digest_length( int algo );
+static int md_digest_length( int algo );
 
 
 /****************
@@ -289,6 +289,56 @@ _gcry_md_write (gcry_md_hd_t hd, const void *inbuf, size_t inlen)
   md_write (hd, inbuf, inlen);
 }
 
+static void
+md_final (gcry_md_hd_t a)
+{
+  GcryDigestEntry *r;
+
+  if (a->ctx->flags.finalized)
+    return;
+
+  if (a->bufpos)
+    md_write (a, NULL, 0);
+
+  for (r = a->ctx->list; r; r = r->next)
+    (*r->spec->final) (r->context);
+
+  a->ctx->flags.finalized = 1;
+
+  if (!a->ctx->flags.hmac)
+    return;
+
+  for (r = a->ctx->list; r; r = r->next)
+    {
+      byte *p;
+      size_t dlen = r->spec->mdlen;
+      byte *hash;
+      gcry_err_code_t err;
+
+      if (r->spec->read == NULL)
+        continue;
+
+      p = r->spec->read (r->context);
+
+      if (a->ctx->flags.secure)
+        hash = xtrymalloc_secure (dlen);
+      else
+        hash = xtrymalloc (dlen);
+      if (!hash)
+        {
+          err = gpg_err_code_from_errno (errno);
+          _gcry_fatal_error (err, NULL);
+        }
+
+      memcpy (hash, p, dlen);
+      memcpy (r->context, (char *)r->context + r->spec->contextsize * 2,
+              r->spec->contextsize);
+      (*r->spec->write) (r->context, hash, dlen);
+      (*r->spec->final) (r->context);
+      xfree (hash);
+    }
+}
+
 static gcry_err_code_t
 md_enable (gcry_md_hd_t hd, int algorithm)
 {
@@ -410,4 +460,79 @@ _gcry_md_read (gcry_md_hd_t hd, int algo)
      non-operational state.  */
   _gcry_md_ctl (hd, GCRYCTL_FINALIZE, NULL, 0);
   return md_read (hd, algo);
+}
+
+/*
+ * Shortcut function to hash a buffer with a given algo. The only
+ * guaranteed supported algorithms are RIPE-MD160 and SHA-1. The
+ * supplied digest buffer must be large enough to store the resulting
+ * hash.  No error is returned, the function will abort on an invalid
+ * algo.  DISABLED_ALGOS are ignored here.  */
+void
+_gcry_md_hash_buffer (int algo, void *digest,
+                      const void *buffer, size_t length)
+{
+  const gcry_md_spec_t *spec;
+
+  spec = spec_from_algo (algo);
+  if (!spec)
+    {
+      log_debug ("md_hash_buffer: algorithm %d not available\n", algo);
+      return;
+    }
+
+  /*  if (spec->hash_buffers != NULL)
+    {
+      gcry_buffer_t iov;
+
+      iov.size = 0;
+      iov.data = (void *)buffer;
+      iov.off = 0;
+      iov.len = length;
+
+      if (spec->flags.disabled || (!spec->flags.fips && fips_mode ()))
+        log_bug ("gcry_md_hash_buffer failed for algo %d: %s",
+                algo, gpg_strerror (gcry_error (GPG_ERR_DIGEST_ALGO)));
+
+      spec->hash_buffers (digest, spec->mdlen, &iov, 1);
+    }
+    else*/
+    {
+      /* For the others we do not have a fast function, so we use the
+         normal functions. */
+      gcry_md_hd_t h;
+      gpg_err_code_t err;
+
+      err = md_open (&h, algo, 0);
+      if (err)
+        log_bug ("gcry_md_open failed for algo %d: %s",
+                algo, gpg_strerror (gcry_error(err)));
+      md_write (h, (byte *) buffer, length);
+      md_final (h);
+      memcpy (digest, md_read (h, algo), md_digest_length (algo));
+      md_close (h);
+    }
+}
+
+/****************
+ * Return the length of the digest
+ */
+static int
+md_digest_length (int algorithm)
+{
+  const gcry_md_spec_t *spec;
+
+  spec = spec_from_algo (algorithm);
+  return spec? spec->mdlen : 0;
+}
+
+
+/****************
+ * Return the length of the digest in bytes.
+ * This function will return 0 in case of errors.
+ */
+unsigned int
+_gcry_md_get_algo_dlen (int algorithm)
+{
+  return md_digest_length (algorithm);
 }
