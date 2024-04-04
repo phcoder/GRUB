@@ -40,6 +40,19 @@ static byte *md_read( gcry_md_hd_t a, int algo );
 static int md_digest_length( int algo );
 
 
+static gcry_err_code_t
+check_digest_algo (int algorithm)
+{
+  const gcry_md_spec_t *spec;
+
+  spec = spec_from_algo (algorithm);
+  if (spec && !spec->flags.disabled && (spec->flags.fips || !fips_mode ()))
+    return 0;
+
+  return GPG_ERR_DIGEST_ALGO;
+
+}
+
 /****************
  * Open a message digest handle for use with algorithm ALGO.
  * More algorithms may be added by md_enable(). The initial algorithm
@@ -535,4 +548,95 @@ unsigned int
 _gcry_md_get_algo_dlen (int algorithm)
 {
   return md_digest_length (algorithm);
+}
+
+/* Hmmm: add a mode to enumerate the OIDs
+ *	to make g10/sig-check.c more portable */
+static const byte *
+md_asn_oid (int algorithm, size_t *asnlen, size_t *mdlen)
+{
+  const gcry_md_spec_t *spec;
+  const byte *asnoid = NULL;
+
+  spec = spec_from_algo (algorithm);
+  if (spec)
+    {
+      if (asnlen)
+	*asnlen = spec->asnlen;
+      if (mdlen)
+	*mdlen = spec->mdlen;
+      asnoid = spec->asnoid;
+    }
+  else
+    log_bug ("no ASN.1 OID for md algo %d\n", algorithm);
+
+  return asnoid;
+}
+
+
+/****************
+ * Return information about the given cipher algorithm
+ * WHAT select the kind of information returned:
+ *  GCRYCTL_TEST_ALGO:
+ *	Returns 0 when the specified algorithm is available for use.
+ *	buffer and nbytes must be zero.
+ *  GCRYCTL_GET_ASNOID:
+ *	Return the ASNOID of the algorithm in buffer. if buffer is NULL, only
+ *	the required length is returned.
+ *  GCRYCTL_SELFTEST
+ *      Helper for the regression tests - shall not be used by applications.
+ *
+ * Note:  Because this function is in most cases used to return an
+ * integer value, we can make it easier for the caller to just look at
+ * the return value.  The caller will in all cases consult the value
+ * and thereby detecting whether a error occurred or not (i.e. while checking
+ * the block size)
+ */
+gcry_err_code_t
+_gcry_md_algo_info (int algo, int what, void *buffer, size_t *nbytes)
+{
+  gcry_err_code_t rc;
+
+  switch (what)
+    {
+    case GCRYCTL_TEST_ALGO:
+      if (buffer || nbytes)
+	rc = GPG_ERR_INV_ARG;
+      else
+	rc = check_digest_algo (algo);
+      break;
+
+    case GCRYCTL_GET_ASNOID:
+      /* We need to check that the algo is available because
+         md_asn_oid would otherwise raise an assertion. */
+      rc = check_digest_algo (algo);
+      if (!rc)
+        {
+          const char unsigned *asn;
+          size_t asnlen;
+
+          asn = md_asn_oid (algo, &asnlen, NULL);
+          if (buffer && (*nbytes >= asnlen))
+            {
+              memcpy (buffer, asn, asnlen);
+              *nbytes = asnlen;
+            }
+          else if (!buffer && nbytes)
+            *nbytes = asnlen;
+          else
+            {
+              if (buffer)
+                rc = GPG_ERR_TOO_SHORT;
+              else
+                rc = GPG_ERR_INV_ARG;
+            }
+        }
+      break;
+
+    default:
+      rc = GPG_ERR_INV_OP;
+      break;
+  }
+
+  return rc;
 }
