@@ -303,7 +303,7 @@ grub_load_public_key (grub_file_t f)
 	goto fail;
 
       grub_memset (fingerprint_context, 0, GRUB_MD_SHA1->contextsize);
-      GRUB_MD_SHA1->init (fingerprint_context);
+      GRUB_MD_SHA1->init (fingerprint_context, 0);
       GRUB_MD_SHA1->write (fingerprint_context, "\x99", 1);
       len_be = grub_cpu_to_be16 (len);
       GRUB_MD_SHA1->write (fingerprint_context, &len_be, sizeof (len_be));
@@ -499,7 +499,7 @@ grub_verify_signature_init (struct grub_pubkey_context *ctxt, grub_file_t sig)
   if (!ctxt->hash_context)
     return grub_errno;
 
-  ctxt->hash->init (ctxt->hash_context);
+  ctxt->hash->init (ctxt->hash_context, 0);
   ctxt->sig = sig;
 
   return GRUB_ERR_NONE;
