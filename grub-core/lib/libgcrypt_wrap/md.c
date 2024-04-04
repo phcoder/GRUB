@@ -421,6 +421,29 @@ _gcry_md_enable (gcry_md_hd_t hd, int algorithm)
   return md_enable (hd, algorithm);
 }
 
+gcry_err_code_t
+_gcry_md_ctl (gcry_md_hd_t hd, int cmd, void *buffer, size_t buflen)
+{
+  gcry_err_code_t rc = 0;
+
+  (void)buflen; /* Currently not used.  */
+  (void)buffer;
+
+  switch (cmd)
+    {
+    case GCRYCTL_FINALIZE:
+      md_final (hd);
+      break;
+    case GCRYCTL_START_DUMP:
+      break;
+    case GCRYCTL_STOP_DUMP:
+      break;
+    default:
+      rc = GPG_ERR_INV_OP;
+    }
+  return rc;
+}
+
 /****************
  * If ALGO is null get the digest for the used algo (which should be
  * only one)
