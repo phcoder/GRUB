@@ -37,7 +37,7 @@ struct grub_crypto_hmac_handle
 static gcry_cipher_spec_t *grub_ciphers = NULL;
 static gcry_md_spec_t *grub_digests = NULL;
 
-int _gcry_no_fips_mode_required;
+int _gcry_no_fips_mode_required = 1;
 
 void (*grub_crypto_autoload_hook) (const char *name) = NULL;
 
