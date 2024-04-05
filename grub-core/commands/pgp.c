@@ -136,16 +136,6 @@ struct signature_v4_header
   grub_uint16_t hashed_sub;
 } GRUB_PACKED;
 
-const char *hashes[] = {
-  [0x01] = "md5",
-  [0x02] = "sha1",
-  [0x03] = "ripemd160",
-  [0x08] = "sha256",
-  [0x09] = "sha384",
-  [0x0a] = "sha512",
-  [0x0b] = "sha224"
-};
-
 struct gcry_pk_spec *grub_crypto_pk_dsa;
 struct gcry_pk_spec *grub_crypto_pk_ecdsa;
 struct gcry_pk_spec *grub_crypto_pk_rsa;
@@ -487,15 +477,12 @@ grub_verify_signature_init (struct grub_pubkey_context *ctxt, grub_file_t sig)
   if (t != 0)
     return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
 
-  if (h >= ARRAY_SIZE (hashes) || hashes[h] == NULL)
-    return grub_error (GRUB_ERR_BAD_SIGNATURE, "unknown hash");
-
   if (pk >= ARRAY_SIZE (pkalgos) || pkalgos[pk].name == NULL)
     return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
 
-  ctxt->hash = grub_crypto_lookup_md_by_name (hashes[h]);
+  ctxt->hash = grub_crypto_lookup_md_by_algo (h);
   if (!ctxt->hash)
-    return grub_error (GRUB_ERR_BAD_SIGNATURE, "hash `%s' not loaded", hashes[h]);
+    return grub_error (GRUB_ERR_BAD_SIGNATURE, "hash `%d' not loaded", h);
 
   grub_dprintf ("crypt", "alive\n");
 
@@ -660,7 +647,7 @@ grub_verify_signature_real (struct grub_pubkey_context *ctxt,
   gcry_sexp_t hsexp, pubkey, sig;
   grub_size_t errof;
 
-  if(_gcry_sexp_build(&hsexp, &errof, "(%M)", hmpi))
+  if(_gcry_sexp_build(&hsexp, &errof, "(data (flags pkcs1) (hash %s %b))", ctxt->hash->name, ctxt->hash->mdlen, hval))
     goto fail;
 
   if(_gcry_sexp_build(&pubkey, &errof, pkalgos[pk].pubsexp, sk->mpis[0], sk->mpis[1], sk->mpis[2], sk->mpis[3]))
