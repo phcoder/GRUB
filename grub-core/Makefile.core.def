@@ -2558,6 +2558,7 @@ module = {
   name = pubkey;
   common = lib/libgcrypt-grub/cipher/pubkey-util.c;
   common = lib/libgcrypt-grub/cipher/rsa-common.c;
+  common = lib/libgcrypt-grub/cipher/dsa-common.c;
   common = lib/libgcrypt-grub/src/sexp.c;
   common = lib/b64dec.c;
 

@@ -47,6 +47,15 @@ gcry_xcalloc (size_t n, size_t m)
 }
 
 void *
+_gcry_calloc (size_t n, size_t m)
+{
+  size_t sz;
+  if (grub_mul (n, m, &sz))
+    return NULL;
+  return grub_zalloc (sz);
+}
+
+void *
 gcry_xmalloc_secure (size_t n)
 {
   void *ret;
