@@ -160,7 +160,9 @@ rsa_pad (gcry_mpi_t *hmpi, grub_uint8_t *hval,
 struct
 {
   const char *name;
+  const char *sigsexp;
   grub_size_t nmpisig;
+  const char *pubsexp;
   grub_size_t nmpipub;
   struct gcry_pk_spec **algo;
   int (*pad) (gcry_mpi_t *hmpi, grub_uint8_t *hval,
@@ -168,9 +170,11 @@ struct
   const char *module;
 } pkalgos[] =
   {
-    [1] = { "rsa", 1, 2, &grub_crypto_pk_rsa, rsa_pad, "gcry_rsa" },
-    [3] = { "rsa", 1, 2, &grub_crypto_pk_rsa, rsa_pad, "gcry_rsa" },
-    [17] = { "dsa", 2, 4, &grub_crypto_pk_dsa, dsa_pad, "gcry_dsa" },
+    [1] = { "rsa", "(sig-val (rsa (s %M)))", 1, "(public-key (dsa (n %M) (e %M)))", 2, &grub_crypto_pk_rsa, rsa_pad, "gcry_rsa" },
+    [3] = { "rsa", "(sig-val (rsa (s %M)))", 1, "(public-key (dsa (n %M) (e %M)))", 2, &grub_crypto_pk_rsa, rsa_pad, "gcry_rsa" },
+    [17] = { "dsa", "(sig-val (dsa (r %M) (s %M)))", 2,
+	     "(public-key (dsa (p %M) (q %M) (g %M) (y %M)))",
+	     4, &grub_crypto_pk_dsa, dsa_pad, "gcry_dsa" },
   };
 
 struct grub_public_key
@@ -652,7 +656,24 @@ grub_verify_signature_real (struct grub_pubkey_context *ctxt,
 		  pkalgos[pk].module);
       goto fail;
     }
-  if ((*pkalgos[pk].algo)->verify (0, hmpi, mpis, sk->mpis, 0, 0))
+
+  gcry_sexp_t hsexp, pubkey, sig;
+  grub_size_t errof;
+
+  if(_gcry_sexp_build(&hsexp, &errof, "(%M)", hmpi))
+    goto fail;
+
+  if(_gcry_sexp_build(&pubkey, &errof, pkalgos[pk].pubsexp, sk->mpis[0], sk->mpis[1], sk->mpis[2], sk->mpis[3]))
+    goto fail;
+
+  if(_gcry_sexp_build(&sig, &errof, pkalgos[pk].sigsexp, mpis[0], mpis[1]))
+    goto fail;
+
+  _gcry_sexp_dump(sig);
+  _gcry_sexp_dump(hsexp);
+  _gcry_sexp_dump(pubkey);
+
+  if ((*pkalgos[pk].algo)->verify (sig, hsexp, pubkey))
     goto fail;
 
   grub_free (readbuf);
