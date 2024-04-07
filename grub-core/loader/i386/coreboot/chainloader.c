@@ -497,11 +497,23 @@ grub_cmd_chain (grub_command_t cmd __attribute__ ((unused)),
   return GRUB_ERR_NONE;
 }
 
+#ifdef GRUB_MACHINE_COREBOOT
 static grub_command_t cmd_chain;
+#endif
+static grub_command_t cmd_cbchain;
 
 GRUB_MOD_INIT (chain)
 {
+#ifdef GRUB_MACHINE_COREBOOT
   cmd_chain = grub_register_command ("chainloader", grub_cmd_chain,
+				     N_("FILE"),
+				     /* TRANSLATORS: "payload" is a term used
+					by coreboot and must be translated in
+					sync with coreboot. If unsure,
+					let it untranslated.  */
+				     N_("Load another coreboot payload"));
+#endif
+  cmd_chain = grub_register_command ("cbpayload", grub_cmd_chain,
 				     N_("FILE"),
 				     /* TRANSLATORS: "payload" is a term used
 					by coreboot and must be translated in
@@ -512,6 +524,9 @@ GRUB_MOD_INIT (chain)
 
 GRUB_MOD_FINI (chain)
 {
+#ifdef GRUB_MACHINE_COREBOOT
   grub_unregister_command (cmd_chain);
+#endif
+  grub_unregister_command (cmd_cbchain);
   grub_chain_unload ();
 }

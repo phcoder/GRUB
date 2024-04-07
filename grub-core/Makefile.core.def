@@ -1941,6 +1941,13 @@ module = {
 };
 
 module = {
+  name = cbchain;
+  common = loader/i386/coreboot/chainloader.c;
+  enable = i386_pc;
+  enable = efi;
+};
+
+module = {
   name = mmap;
   common = mmap/mmap.c;
   x86 = mmap/i386/uppermem.c;
