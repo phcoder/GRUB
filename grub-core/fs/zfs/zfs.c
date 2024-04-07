@@ -2377,9 +2377,8 @@ zio_read (const blkptr_t *bp, void **buf,
 	  return grub_error (GRUB_ERR_BAD_FS, "no key found in keychain");
 	}
 
-      iv[0] = (bp)->blk_dva[2].dva_word[1];
-      iv[1] = (bp)->blk_dva[2].dva_word[1] >> 32;
-      iv[2] = (bp)->blk_fill >> 32;
+      grub_set_unaligned64(iv, grub_cpu_to_zfs64((bp)->blk_dva[2].dva_word[1], BP_GET_BYTEORDER(bp)));
+      iv[2] = grub_cpu_to_zfs32((bp)->blk_fill >> 32, BP_GET_BYTEORDER(bp));
 
       if (datto_dnode_encryption)
 	{

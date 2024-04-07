@@ -430,7 +430,7 @@ grub_zfs_decrypt_datto (const struct grub_zfs_datto_key *key,
   if (err)
     return grub_crypto_gcry_error (err);
 
-  grub_memcpy(t, &salt, 8);
+  grub_set_unaligned64(t, grub_cpu_to_zfs64(salt, endian));
   t[8] = 1;
   err = grub_crypto_hmac_buffer (GRUB_MD_SHA512,
 				 extractkey, 64,
