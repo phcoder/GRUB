@@ -2504,6 +2504,7 @@ zio_read (const blkptr_t *bp, void **buf,
 
       err = decomp_table[comp].decomp_func (compbuf, *buf, psize, lsize);
       grub_free (compbuf);
+      compbuf = NULL;
       if (err)
 	{
 	  grub_free (*buf);
@@ -2547,7 +2548,7 @@ zio_read (const blkptr_t *bp, void **buf,
 
       if (grub_crypto_memcmp(&zc.zc_word[2], hash, 8) != 0)
 	{
-	  grub_free (compbuf);
+	  grub_free (*buf);
           *buf = NULL;
 	  grub_dprintf ("zfs", "actual hash "
 			"%016llx %016llx %016llx %016llx %016llx %016llx %016llx %016llx \n",
