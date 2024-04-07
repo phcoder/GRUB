@@ -2169,7 +2169,7 @@ datto_is_encrypted_type(grub_uint8_t dn_type)
 }
 
 static void
-add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp)
+add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp, grub_zfs_endian_t endian)
 {
   grub_uint64_t blk_prop = BP_IS_HOLE(&bp) ? 0 : bp.blk_prop;
 
@@ -2182,7 +2182,14 @@ add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp)
   grub_set_unaligned64(&aad[*aad_offset], grub_cpu_to_le64(blk_prop));
   *aad_offset += 8;
 
-  grub_memcpy(&aad[*aad_offset], &bp.blk_cksum.zc_word[2], 16);
+  if (endian == GRUB_ZFS_BIG_ENDIAN)
+    {
+      grub_set_unaligned64(&aad[*aad_offset], grub_swap_bytes64(bp.blk_cksum.zc_word[2]));
+      grub_set_unaligned64(&aad[*aad_offset+8], grub_swap_bytes64(bp.blk_cksum.zc_word[3]));
+    }
+  else
+      grub_memcpy(&aad[*aad_offset], &bp.blk_cksum.zc_word[2], 16);
+      
   *aad_offset += 16;
 
   grub_memset(&aad[*aad_offset], 0, 8);
@@ -2305,7 +2312,7 @@ zio_read (const blkptr_t *bp, void **buf,
 
   if (!BP_IS_EMBEDDED(bp) && datto_authenticated && data->subvol.key_datto.hmac_key && BP_GET_LEVEL(bp) == 0)
     {
-      grub_uint8_t hmac[64];
+      grub_uint64_t hmac[8];
       gcry_error_t err_gcry;
       err_gcry = grub_crypto_hmac_buffer (GRUB_MD_SHA512,
 					  data->subvol.key_datto.hmac_key, 64,
@@ -2317,27 +2324,27 @@ zio_read (const blkptr_t *bp, void **buf,
           *buf = NULL;
 	  return grub_crypto_gcry_error (err_gcry);
 	}
+
+      if (BP_GET_BYTEORDER(bp) == GRUB_ZFS_BIG_ENDIAN)
+	{
+	  grub_zfs_byteswap_u64(&hmac[0]);
+	  grub_zfs_byteswap_u64(&hmac[1]);
+	}      
+
       if (grub_crypto_memcmp(&zc.zc_word[2], hmac, 8) != 0)
 	{
 	  grub_free (compbuf);
           *buf = NULL;
 	  grub_dprintf ("zfs", "actual hmac "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x\n",
-			hmac[ 0], hmac[ 1], hmac[ 2], hmac[ 3], hmac[ 4], hmac[ 5], hmac[ 6], hmac[ 7],
-			hmac[ 8], hmac[ 9], hmac[10], hmac[11], hmac[12], hmac[13], hmac[14], hmac[15],
-			hmac[16], hmac[17], hmac[18], hmac[19], hmac[20], hmac[21], hmac[22], hmac[23],
-			hmac[24], hmac[25], hmac[26], hmac[27], hmac[28], hmac[29], hmac[30], hmac[31],
-			hmac[32], hmac[33], hmac[34], hmac[35], hmac[36], hmac[37], hmac[38], hmac[39],
-			hmac[40], hmac[41], hmac[42], hmac[43], hmac[44], hmac[45], hmac[46], hmac[47],
-			hmac[48], hmac[49], hmac[50], hmac[51], hmac[52], hmac[53], hmac[54], hmac[55],
-			hmac[56], hmac[57], hmac[58], hmac[59], hmac[60], hmac[61], hmac[62], hmac[63]);
+			"%016llx %016llx %016llx %016llx %016llx %016llx %016llx %016llx \n",
+			(unsigned long long) hmac[0],
+			(unsigned long long) hmac[1],
+			(unsigned long long) hmac[2],
+			(unsigned long long) hmac[3],
+			(unsigned long long) hmac[4],
+			(unsigned long long) hmac[5],
+			(unsigned long long) hmac[6],
+			(unsigned long long) hmac[7]);
 	  grub_dprintf ("zfs", "expected hmac %016llx %016llx %016llx %016llx\n",
 			(unsigned long long) zc.zc_word[0],
 			(unsigned long long) zc.zc_word[1],
@@ -2398,10 +2405,10 @@ zio_read (const blkptr_t *bp, void **buf,
 	      aad_offset += 64;
 
 	      for (i = 0; i < dnp->dn_nblkptr; i++)
-		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_blkptr[i]);
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_blkptr[i], BP_GET_BYTEORDER(bp));
 
 	      if (has_spill)
-		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_spill);
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_spill, BP_GET_BYTEORDER(bp));
 
 	      char *bonus = DN_BONUS(dnp);
 	      char *bonusmaxptr = (char *) (dnp + 1);
@@ -2518,7 +2525,7 @@ zio_read (const blkptr_t *bp, void **buf,
 
   if (!BP_IS_EMBEDDED(bp) && datto_authenticated && BP_GET_LEVEL(bp) > 0)
     {
-      grub_uint8_t hash[64];
+      grub_uint64_t hash[8];
       char *aad = grub_malloc(lsize);
       grub_size_t aad_offset = 0;
       if (!aad)
@@ -2528,30 +2535,30 @@ zio_read (const blkptr_t *bp, void **buf,
 	  return grub_errno;
 	}
       for (unsigned i = 0; i < lsize / sizeof(blkptr_t); i++)
-	add_blkptr_to_aad (aad, &aad_offset, ((blkptr_t *)*buf)[i]);
+	add_blkptr_to_aad (aad, &aad_offset, ((blkptr_t *)*buf)[i], BP_GET_BYTEORDER(bp));
       grub_crypto_hash(GRUB_MD_SHA512, hash, aad, aad_offset);
       grub_free(aad);
+
+      if (BP_GET_BYTEORDER(bp) == GRUB_ZFS_BIG_ENDIAN)
+	{
+	  grub_zfs_byteswap_u64(&hash[0]);
+	  grub_zfs_byteswap_u64(&hash[1]);
+	}      
+
       if (grub_crypto_memcmp(&zc.zc_word[2], hash, 8) != 0)
 	{
 	  grub_free (compbuf);
           *buf = NULL;
 	  grub_dprintf ("zfs", "actual hash "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x "
-			"%02x %02x %02x %02x %02x %02x %02x %02x\n",
-			hash[ 0], hash[ 1], hash[ 2], hash[ 3], hash[ 4], hash[ 5], hash[ 6], hash[ 7],
-			hash[ 8], hash[ 9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15],
-			hash[16], hash[17], hash[18], hash[19], hash[20], hash[21], hash[22], hash[23],
-			hash[24], hash[25], hash[26], hash[27], hash[28], hash[29], hash[30], hash[31],
-			hash[32], hash[33], hash[34], hash[35], hash[36], hash[37], hash[38], hash[39],
-			hash[40], hash[41], hash[42], hash[43], hash[44], hash[45], hash[46], hash[47],
-			hash[48], hash[49], hash[50], hash[51], hash[52], hash[53], hash[54], hash[55],
-			hash[56], hash[57], hash[58], hash[59], hash[60], hash[61], hash[62], hash[63]);
+			"%016llx %016llx %016llx %016llx %016llx %016llx %016llx %016llx \n",
+			(unsigned long long) hash[0],
+			(unsigned long long) hash[1],
+			(unsigned long long) hash[2],
+			(unsigned long long) hash[3],
+			(unsigned long long) hash[4],
+			(unsigned long long) hash[5],
+			(unsigned long long) hash[6],
+			(unsigned long long) hash[7]);
 	  grub_dprintf ("zfs", "expected hash %016llx %016llx %016llx %016llx\n",
 			(unsigned long long) zc.zc_word[0],
 			(unsigned long long) zc.zc_word[1],
