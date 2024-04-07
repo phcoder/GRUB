@@ -2169,8 +2169,11 @@ datto_is_encrypted_type(grub_uint8_t dn_type)
 }
 
 static void
-add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp, grub_zfs_endian_t endian)
+add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp, grub_zfs_endian_t endian, int preswapped)
 {
+  if (!preswapped && !GRUB_ZFS_IS_NATIVE_BYTEORDER(endian))
+    grub_zfs_byteswap_blkptr(&bp);
+  
   grub_uint64_t blk_prop = BP_IS_HOLE(&bp) ? 0 : bp.blk_prop;
 
   if (BP_GET_LEVEL(&bp) != 0) {
@@ -2384,6 +2387,7 @@ zio_read (const blkptr_t *bp, void **buf,
 	{
 	  grub_size_t offset = 0, crypt_offset = 0, aad_offset = 0;
 	  char *crypt = grub_malloc(psize), *aad = grub_malloc(psize);
+	  grub_zfs_endian_t endian = BP_GET_BYTEORDER(bp);
 	  if (!crypt || !aad)
 	    {
 	      grub_free (compbuf);
@@ -2395,19 +2399,21 @@ zio_read (const blkptr_t *bp, void **buf,
 	  for (offset = 0; offset + sizeof (dnode_phys_t) <= psize; offset += sizeof(dnode_phys_t))
 	    {
 	      dnode_phys_t *dnp = (dnode_phys_t *) (void *) (compbuf + offset);
+	      dnode_phys_t *dno = (dnode_phys_t *) (aad + aad_offset);
 	      grub_memcpy(aad + aad_offset, dnp, 64);
-	      ((dnode_phys_t *)(void *)(aad + aad_offset))->dn_used = 0;
-	      ((dnode_phys_t *)(void *)(aad + aad_offset))->dn_flags &= DNODE_FLAG_SPILL_BLKPTR;
+	      dno->dn_used = 0;
+	      dno->dn_flags &= DNODE_FLAG_SPILL_BLKPTR;
 	      int has_spill = dnp->dn_flags & DNODE_FLAG_SPILL_BLKPTR;
 	      unsigned i;
 
 	      aad_offset += 64;
 
-	      for (i = 0; i < dnp->dn_nblkptr; i++)
-		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_blkptr[i], BP_GET_BYTEORDER(bp));
+	      for (i = 0; i < dnp->dn_nblkptr; i++) {
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_blkptr[i], endian, 0);
+	      }
 
 	      if (has_spill)
-		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_spill, BP_GET_BYTEORDER(bp));
+		add_blkptr_to_aad (aad, &aad_offset, dnp->dn_spill, endian, 0);
 
 	      char *bonus = DN_BONUS(dnp);
 	      char *bonusmaxptr = (char *) (dnp + 1);
@@ -2422,6 +2428,7 @@ zio_read (const blkptr_t *bp, void **buf,
 	      else
 		{
 		  grub_memcpy(aad + aad_offset, bonus, bonusmaxlen);
+		  grub_zfs_byteswap_type((aad + aad_offset), bonusmaxlen, dnp->dn_bonustype);
 		  aad_offset += bonusmaxlen;
 		}
 	    }
@@ -2429,7 +2436,7 @@ zio_read (const blkptr_t *bp, void **buf,
 						 iv, (bp)->blk_dva[2].dva_word[0],
 						 crypt, crypt_offset, aad, aad_offset,
 						 &zc.zc_word[2],
-						 BP_GET_BYTEORDER(bp));
+						 endian);
 	  grub_size_t out_offset = 0;
 	  for (offset = 0; offset + sizeof (dnode_phys_t) <= psize; offset += sizeof(dnode_phys_t))
 	    {
@@ -2535,7 +2542,7 @@ zio_read (const blkptr_t *bp, void **buf,
 	  return grub_errno;
 	}
       for (unsigned i = 0; i < lsize / sizeof(blkptr_t); i++)
-	add_blkptr_to_aad (aad, &aad_offset, ((blkptr_t *)*buf)[i], BP_GET_BYTEORDER(bp));
+	add_blkptr_to_aad (aad, &aad_offset, ((blkptr_t *)*buf)[i], BP_GET_BYTEORDER(bp), 1);
       grub_crypto_hash(GRUB_MD_SHA512, hash, aad, aad_offset);
       grub_free(aad);
 
