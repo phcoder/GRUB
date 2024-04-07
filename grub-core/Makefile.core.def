@@ -1943,6 +1943,7 @@ module = {
 module = {
   name = cbchain;
   common = loader/i386/coreboot/chainloader.c;
+  common = lib/LzmaDec.c;
   enable = i386_pc;
   enable = efi;
 };

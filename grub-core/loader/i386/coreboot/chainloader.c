@@ -135,7 +135,7 @@ static ISzAlloc g_Alloc = { SzAlloc, SzFree };
 static grub_err_t
 load_segment (grub_file_t file, const char *filename,
 	      void *load_addr, grub_uint32_t comp,
-	      grub_size_t *size, grub_size_t max_size)
+	      grub_uint32_t *size, grub_size_t max_size)
 {
   switch (comp)
     {
@@ -187,8 +187,8 @@ load_segment (grub_file_t file, const char *filename,
 	/* ELzmaFinishMode finishMode,
 	   ELzmaStatus *status, ISzAlloc *alloc)*/
 	grub_free (buf);
-	grub_dprintf ("chain", "%x, %x, %x, %x\n",
-		      insize, src_len, outsize, dst_len);
+	grub_dprintf ("chain", "%lx, %lx, %lx, %lx\n",
+		      (long)insize, (long)src_len, (long)outsize, (long)dst_len);
 	if (res != SZ_OK
 	    || src_len != insize || dst_len != outsize)
 	  return grub_error (GRUB_ERR_BAD_OS, "decompression failure %d", res);
@@ -513,13 +513,13 @@ GRUB_MOD_INIT (chain)
 					let it untranslated.  */
 				     N_("Load another coreboot payload"));
 #endif
-  cmd_chain = grub_register_command ("cbpayload", grub_cmd_chain,
-				     N_("FILE"),
-				     /* TRANSLATORS: "payload" is a term used
-					by coreboot and must be translated in
-					sync with coreboot. If unsure,
-					let it untranslated.  */
-				     N_("Load another coreboot payload"));
+  cmd_cbchain = grub_register_command ("cbpayload", grub_cmd_chain,
+				       N_("FILE"),
+				       /* TRANSLATORS: "payload" is a term used
+					  by coreboot and must be translated in
+					  sync with coreboot. If unsure,
+					  let it untranslated.  */
+				       N_("Load another coreboot payload"));
 }
 
 GRUB_MOD_FINI (chain)
