@@ -2185,7 +2185,7 @@ add_blkptr_to_aad (char *aad, grub_size_t *aad_offset, blkptr_t bp, grub_zfs_end
   grub_set_unaligned64(&aad[*aad_offset], grub_cpu_to_le64(blk_prop));
   *aad_offset += 8;
 
-  if (endian == GRUB_ZFS_BIG_ENDIAN)
+  if (!GRUB_ZFS_IS_NATIVE_BYTEORDER(endian))
     {
       grub_set_unaligned64(&aad[*aad_offset], grub_swap_bytes64(bp.blk_cksum.zc_word[2]));
       grub_set_unaligned64(&aad[*aad_offset+8], grub_swap_bytes64(bp.blk_cksum.zc_word[3]));
@@ -2328,7 +2328,7 @@ zio_read (const blkptr_t *bp, void **buf,
 	  return grub_crypto_gcry_error (err_gcry);
 	}
 
-      if (BP_GET_BYTEORDER(bp) == GRUB_ZFS_BIG_ENDIAN)
+      if (!GRUB_ZFS_IS_NATIVE_BYTEORDER(BP_GET_BYTEORDER(bp)))
 	{
 	  grub_zfs_byteswap_u64(&hmac[0]);
 	  grub_zfs_byteswap_u64(&hmac[1]);
@@ -2546,7 +2546,7 @@ zio_read (const blkptr_t *bp, void **buf,
       grub_crypto_hash(GRUB_MD_SHA512, hash, aad, aad_offset);
       grub_free(aad);
 
-      if (BP_GET_BYTEORDER(bp) == GRUB_ZFS_BIG_ENDIAN)
+      if (!GRUB_ZFS_IS_NATIVE_BYTEORDER(BP_GET_BYTEORDER(bp)))
 	{
 	  grub_zfs_byteswap_u64(&hash[0]);
 	  grub_zfs_byteswap_u64(&hash[1]);
