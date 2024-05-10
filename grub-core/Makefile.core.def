@@ -1205,6 +1205,11 @@ module = {
 };
 
 module = {
+  name = qcow;
+  common = disk/qcow.c;
+};
+
+module = {
   name = cryptodisk;
   common = disk/cryptodisk.c;
 };
