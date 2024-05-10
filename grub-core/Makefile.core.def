@@ -1205,6 +1205,12 @@ module = {
 };
 
 module = {
+  name = qcow;
+  common = disk/qcow.c;
+  cppflags = '-I$(srcdir)/lib/posix_wrap -I$(srcdir)/lib/zstd';
+};
+
+module = {
   name = cryptodisk;
   common = disk/cryptodisk.c;
 };
