@@ -383,12 +383,14 @@ static int cmd = 0;
 static char *debug_str = NULL;
 static char **args = NULL;
 static int mount_crypt = 0;
+static int mount_qcow = 0;
 
 static void
 fstest (int n)
 {
   char *host_file;
   char *loop_name;
+  const char *loopback_cmd = mount_qcow ? "qcow" : "loopback";
   int i;
 
   for (i = 0; i < num_disks; i++)
@@ -405,8 +407,8 @@ fstest (int n)
       argv[0] = loop_name;
       argv[1] = host_file;
 
-      if (execute_command ("loopback", 2, argv))
-        grub_util_error (_("`loopback' command fails: %s"), grub_errmsg);
+      if (execute_command (loopback_cmd, 2, argv))
+        grub_util_error (_("`%s' command fails: %s"), loopback_cmd, grub_errmsg);
 
       grub_free (loop_name);
       grub_free (host_file);
@@ -530,6 +532,7 @@ static struct argp_option options[] = {
   {"diskcount", 'c', N_("NUM"),           0, N_("Specify the number of input files."),                   2},
   {"debug",     'd', N_("STRING"),           0, N_("Set debug environment variable."),  2},
   {"crypto",   'C', NULL, 0, N_("Mount crypto devices."), 2},
+  {"qcow",      'q', NULL, 0, N_("Mount qcow images."), 2},
   {"zfs-key",      'K',
    /* TRANSLATORS: "prompt" is a keyword.  */
    N_("FILE|prompt"), 0, N_("Load zfs crypto key."),                 2},
@@ -595,6 +598,10 @@ argp_parser (int key, char *arg, struct argp_state *state)
 
     case 'C':
       mount_crypt = 1;
+      return 0;
+
+    case 'q':
+      mount_qcow = 1;
       return 0;
 
     case 's':
