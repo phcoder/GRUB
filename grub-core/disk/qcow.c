@@ -24,6 +24,8 @@
 #include <grub/mm.h>
 #include <grub/extcmd.h>
 #include <grub/i18n.h>
+#include <grub/deflate.h>
+#include <zstd.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -51,6 +53,9 @@ struct qcow_header
   grub_uint64_t feat_autoclear;
   grub_uint32_t refcount_order;
   grub_uint32_t header_length;
+
+  /* Only if v3 and header_length allows it.  */
+  grub_uint8_t compression_type;
 };
 
 struct qcow_header_extension
@@ -70,6 +75,7 @@ struct grub_qcow
   grub_uint64_t *l2_0;
   grub_uint64_t *l2_cache;
   grub_uint64_t l2_cache_current;
+  grub_uint8_t compression_type;
 };
 
 static struct grub_qcow *qcow_list;
@@ -133,6 +139,9 @@ open_qcow (struct grub_qcow *qcow)
     }
   if (grub_errno)
     return grub_errno;
+
+  grub_uint32_t header_length = qcow->head.version == grub_cpu_to_be32_compile_time(3) ? grub_be_to_cpu32(qcow->head.header_length) : 72;
+  qcow->compression_type = (header_length >= 105) ? qcow->head.compression_type : 0;
 
   return GRUB_ERR_NONE;
 }
@@ -288,12 +297,12 @@ get_l2_entry(struct grub_qcow *qcow, grub_uint64_t cluster, grub_uint64_t *l2e)
     return grub_error(GRUB_ERR_IO, "seeking outside of L1 table");
   if (l1n == 0)
     {
-      *l2e = qcow->l2_0[l2n];
+      *l2e = grub_be_to_cpu64(qcow->l2_0[l2n]);
       return GRUB_ERR_NONE;
     }
   if (l1n == qcow->l2_cache_current)
     {
-      *l2e = qcow->l2_cache[l2n];
+      *l2e = grub_be_to_cpu64(qcow->l2_cache[l2n]);
       return GRUB_ERR_NONE;
     }
 
@@ -303,7 +312,7 @@ get_l2_entry(struct grub_qcow *qcow, grub_uint64_t cluster, grub_uint64_t *l2e)
   if (grub_errno)
     return grub_errno;
   qcow->l2_cache_current = l1n;
-  *l2e = qcow->l2_cache[l2n];
+  *l2e = grub_be_to_cpu64(qcow->l2_cache[l2n]);
   return GRUB_ERR_NONE;
 }
 
@@ -317,6 +326,8 @@ grub_qcow_read (grub_disk_t disk, grub_disk_addr_t sector,
   grub_uint64_t cluster = sector >> cluster_sec_bits;
   grub_size_t cluster_sec_offset = sector & ((1 << cluster_sec_bits) - 1);
   grub_file_t file = qcow->file;
+  char *decompress_buf = NULL;
+  grub_size_t decompress_buf_size = 0;
 
   while (size)
     {
@@ -327,18 +338,81 @@ grub_qcow_read (grub_disk_t disk, grub_disk_addr_t sector,
       
       grub_err_t err = get_l2_entry(qcow, cluster, &l2e);
       if (err)
-	return err;
-
-      if (l2e)
 	{
-	  grub_file_seek (file, (grub_be_to_cpu64(l2e) & LX_OFFSET_MASK) + (cluster_sec_offset << GRUB_DISK_SECTOR_BITS));
-	  grub_file_read (file, buf, max_read << GRUB_DISK_SECTOR_BITS);
-	  if (grub_errno)
-	    return grub_errno;
+	  grub_free (decompress_buf);
+	  return err;
 	}
-      else
+
+      /* Empty.  */
+      if (l2e == 0)
 	{
 	  grub_memset (buf, 0, max_read << GRUB_DISK_SECTOR_BITS);
+	}
+      /* Uncompressed.  */
+      else if (!(l2e & (1LL << 62)))
+	{
+	  grub_file_seek (file, (l2e & LX_OFFSET_MASK) + (cluster_sec_offset << GRUB_DISK_SECTOR_BITS));
+	  grub_file_read (file, buf, max_read << GRUB_DISK_SECTOR_BITS);
+	  if (grub_errno)
+	    {
+	      grub_free (decompress_buf);
+	      return grub_errno;
+	    }
+	}
+      /* Compressed.  */
+      else
+	{
+	  int offset_bits = 62 - (grub_be_to_cpu32(qcow->head.cluster_bits) - 8);
+	  grub_uint64_t off = l2e & ((1LL << offset_bits) - 1);
+	  grub_uint32_t compressed_size = (((l2e & 0x3fffffffffffffffLL) >> offset_bits) << 9) + 0x200 - (off & 0x1ff);
+	  if (qcow->compression_type > 1)
+	    {
+	      grub_free (decompress_buf);
+	      return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "compression type %d not supported yet", qcow->compression_type);
+	    }
+	  grub_file_seek (file, off);
+	  if (compressed_size > decompress_buf_size)
+	    {
+	      grub_free(decompress_buf);
+	      decompress_buf_size = compressed_size * 2;
+	      decompress_buf = grub_malloc (decompress_buf_size);
+	      if (!decompress_buf)
+		return grub_errno;
+	    }
+	  grub_file_read (file, decompress_buf, compressed_size);
+
+	  grub_size_t decompressed_size = cluster_sec_size << 9;
+
+	  switch (qcow->compression_type)
+	    {
+	    case 0:
+	      if (grub_deflate_decompress(decompress_buf, compressed_size, (cluster_sec_offset << GRUB_DISK_SECTOR_BITS), buf, max_read << GRUB_DISK_SECTOR_BITS) < 0)
+		{
+		  grub_free (decompress_buf);
+		  return grub_errno;
+		}
+	      break;
+	    case 1:
+	      {
+		char *target_buf = NULL, *target;
+		if (max_read == cluster_sec_size && cluster_sec_offset == 0)
+		  target = buf;
+		else
+		  {
+		    target = target_buf = grub_malloc(decompressed_size);
+		    if (!target)
+		      {
+			grub_free (decompress_buf);
+			return grub_errno;
+		      }
+		  }
+		ZSTD_decompress (target, decompressed_size, decompress_buf, compressed_size);
+		if (target != buf)
+		  grub_memcpy(buf, target + (cluster_sec_offset << GRUB_DISK_SECTOR_BITS), max_read << GRUB_DISK_SECTOR_BITS);
+		grub_free (target_buf);
+	      }
+	      break;
+	    }
 	}
       buf += max_read << GRUB_DISK_SECTOR_BITS;
       size -= max_read;
@@ -346,6 +420,7 @@ grub_qcow_read (grub_disk_t disk, grub_disk_addr_t sector,
       cluster++;
     }
 
+  grub_free (decompress_buf);
   return 0;
 }
 

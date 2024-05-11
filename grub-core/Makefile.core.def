@@ -1218,6 +1218,7 @@ module = {
 module = {
   name = qcow;
   common = disk/qcow.c;
+  cppflags = '-I$(srcdir)/lib/posix_wrap -I$(srcdir)/lib/zstd';
 };
 
 module = {
