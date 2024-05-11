@@ -1,11 +1,15 @@
 /*
  *  GRUB  --  GRand Unified Bootloader
- *  Copyright (C) 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
+ *
+ *  Copyright (C) 2019 secunet Security Networks AG
+ *  Copyright (C) 2024  Free Software Foundation, Inc.
  *
  *  GRUB is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
+ *
+ *  Additionally this file can be distributed under 3-clause BSD license.
  *
  *  GRUB is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,13 +39,23 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define NVME_CC_IOSQES	(6 << 16)
 #define NVME_CC_IOCQES	(4 << 20)
 
+#define NVME_QUEUE_SIZE 2
+#define NVME_SQ_ENTRY_SIZE 64
+#define NVME_CQ_ENTRY_SIZE 16
+
 struct grub_nvme_mmio_reg
 {
   /*  0 */ grub_uint64_t cap;
-  /*  8 */ grub_uint32_t fill1[3];
+  /*  8 */ grub_uint32_t vs;
+  /*  c */ grub_uint32_t intms;
+  /* 10 */ grub_uint32_t intmc;
   /* 14 */ grub_uint32_t controller_config;
-  /* 18 */ grub_uint32_t fill2;
+  /* 18 */ grub_uint32_t reserved1;
   /* 1c */ grub_uint32_t controller_status;
+  /* 20 */ grub_uint32_t nssr;
+  /* 24 */ grub_uint32_t aqa;
+  /* 28 */ grub_uint64_t asq;
+  /* 30 */ grub_uint64_t acq;
 };
 
 struct grub_nvme_device
@@ -49,11 +63,166 @@ struct grub_nvme_device
   struct grub_nvme_device *next;
   struct grub_nvme_device **prev;
   volatile struct grub_nvme_mmio_reg *regs;
-  struct grub_pci_dma_chunk *prp_list_chunk;
+  struct grub_pci_dma_chunk *prp_list;
+  struct grub_pci_dma_chunk *sq_buffer;
+  struct grub_pci_dma_chunk *cq_buffer;
+  int num;
+
+  struct {
+    volatile void *base;
+    volatile grub_uint32_t *bell;
+    grub_uint16_t idx; // bool pos 0 or 1
+    grub_uint16_t round; // bool round 0 or 1+0xd
+  } queue[4];
 };
 
-static struct grub_nvme_device *grub_nvme_device;
+struct nvme_s_queue_entry {
+  grub_uint32_t dw[16];
+};
+
+struct nvme_c_queue_entry {
+  grub_uint32_t dw[4];
+};
+
+static struct grub_nvme_device *grub_nvme_devices;
 static int numdevs;
+
+enum nvme_queue {
+  NVME_ADMIN_QUEUE = 0,
+  ads = 0,
+  adc = 1,
+  NVME_IO_QUEUE = 2,
+  ios = 2,
+  ioc = 3,
+};
+
+static grub_err_t
+nvme_cmd(struct grub_nvme_device *nvme, enum nvme_queue q, const struct nvme_s_queue_entry *cmd)
+{
+  int sq = q, cq = q+1;
+
+  void *s_entry = (char *) nvme->queue[sq].base + (nvme->queue[sq].idx * NVME_SQ_ENTRY_SIZE);
+  grub_memcpy(s_entry, cmd, NVME_SQ_ENTRY_SIZE);
+  nvme->queue[sq].idx = (nvme->queue[sq].idx + 1) & (NVME_QUEUE_SIZE - 1);
+  *nvme->queue[sq].bell = nvme->queue[sq].idx;
+
+  struct nvme_c_queue_entry *c_entry = (struct nvme_c_queue_entry *)
+    ((char *) nvme->queue[cq].base + (nvme->queue[cq].idx * NVME_CQ_ENTRY_SIZE));
+  grub_uint64_t endtime = grub_get_time_ms () + 100;
+  while (((*(volatile grub_uint32_t *)(&c_entry->dw[3]) >> 16) & 0x1) == nvme->queue[cq].round)
+    {
+      if (grub_get_time_ms () > endtime)
+	return grub_error(GRUB_ERR_IO, "timeout waiting for NVMe command completion");
+    }
+  nvme->queue[cq].idx = (nvme->queue[cq].idx + 1) & (NVME_QUEUE_SIZE - 1);
+  *nvme->queue[cq].bell = nvme->queue[cq].idx;
+  if (nvme->queue[cq].idx == 0)
+    nvme->queue[cq].round = (nvme->queue[cq].round + 1) & 1;
+  int io_err = c_entry->dw[3] >> 17;
+  if (io_err)
+    return grub_error(GRUB_ERR_IO, "NVMe error %d", io_err);
+  return GRUB_ERR_NONE;
+}
+
+static int
+create_admin_queues(struct grub_nvme_device *nvme)
+{
+  grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
+  nvme->regs->aqa = (NVME_QUEUE_SIZE - 1) << 16 | (NVME_QUEUE_SIZE - 1);
+
+  nvme->sq_buffer = grub_memalign_dma32(0x1000, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!nvme->sq_buffer)
+    {
+      grub_dprintf("nvme", "NVMe ERROR: Failed to allocated memory for admin submission queue\n");
+      return -1;
+    }
+  grub_memset((void *) grub_dma_get_virt(nvme->sq_buffer), 0, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  nvme->regs->asq = grub_dma_get_phys(nvme->sq_buffer);
+
+  nvme->queue[ads].base = grub_dma_get_virt(nvme->sq_buffer);
+  nvme->queue[ads].bell = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ads * (1 << cap_dstrd));
+  nvme->queue[ads].idx = 0;
+
+  nvme->cq_buffer = grub_memalign_dma32(0x1000, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!nvme->cq_buffer)
+    {
+      grub_dprintf("nvme", "NVMe ERROR: Failed to allocate memory for admin completion queue\n");
+      grub_dma_free(nvme->sq_buffer);
+      return -1;
+    }
+  grub_memset((void *) grub_dma_get_virt(nvme->cq_buffer), 0, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  nvme->regs->acq = grub_dma_get_phys(nvme->cq_buffer);
+
+  nvme->queue[adc].base = nvme->cq_buffer;
+  nvme->queue[adc].bell = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (adc * (1 << cap_dstrd));
+  nvme->queue[adc].idx = 0;
+  nvme->queue[adc].round = 0;
+
+  return 0;
+}
+
+static int create_io_submission_queue(struct grub_nvme_device *nvme)
+{
+  struct grub_pci_dma_chunk *sq_buffer = grub_memalign_dma32(0x1000, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!sq_buffer)
+    {
+      grub_dprintf("nvme", "NVMe ERROR: Failed to allocate memory for io submission queue.\n");
+      return -1;
+    }
+  grub_memset((void *) grub_dma_get_virt(sq_buffer), 0, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+
+  struct nvme_s_queue_entry e = {
+    .dw[0]  = 0x01,
+    .dw[6]  = grub_dma_get_phys(sq_buffer),
+    .dw[10] = ((NVME_QUEUE_SIZE - 1) << 16) | ios >> 1,
+    .dw[11] = (1 << 16) | 1,
+  };
+
+  int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
+  if (res) {
+    grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
+    grub_dma_free(sq_buffer);
+    return res;
+  }
+
+  grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
+  nvme->queue[ios].base = sq_buffer;
+  nvme->queue[ios].bell = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ios * (1 << cap_dstrd));
+  nvme->queue[ios].idx = 0;
+  return 0;
+}
+
+static int create_io_completion_queue(struct grub_nvme_device *nvme)
+{
+  struct grub_pci_dma_chunk *cq_buffer = grub_memalign_dma32(0x1000, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!cq_buffer) {
+    grub_dprintf("nvme", "NVMe ERROR: Failed to allocate memory for io completion queue.\n");
+    return -1;
+  }
+  grub_memset((void *) grub_dma_get_virt(nvme->cq_buffer), 0, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+
+  const struct nvme_s_queue_entry e = {
+		.dw[0]  = 0x05,
+		.dw[6]  = grub_dma_get_phys(cq_buffer),
+		.dw[10] = ((NVME_QUEUE_SIZE - 1) << 16) | ioc >> 1,
+		.dw[11] = 1,
+	};
+
+	int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
+	if (res) {
+	  grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
+		grub_dma_free(cq_buffer);
+		return res;
+	}
+
+	grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
+	nvme->queue[ioc].base  = cq_buffer;
+	nvme->queue[ioc].bell  = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ioc * (1 << cap_dstrd));
+	nvme->queue[ioc].idx   = 0;
+	nvme->queue[ioc].round = 0;
+
+	return 0;
+}
 
 static int
 grub_nvme_pciinit (grub_pci_device_t dev,
@@ -63,8 +232,7 @@ grub_nvme_pciinit (grub_pci_device_t dev,
   grub_pci_address_t addr;
   grub_uint32_t class;
   grub_uint64_t bar;
-  unsigned i, nports;
-  volatile volatile struct grub_nvme_mmio_reg *mmio_reg;
+  volatile struct grub_nvme_mmio_reg *mmio_reg;
 
   /* Read class.  */
   addr = grub_pci_make_address (dev, GRUB_PCI_REG_CLASS);
@@ -101,6 +269,14 @@ grub_nvme_pciinit (grub_pci_device_t dev,
   }
 
   mmio_reg->controller_config = 0;
+
+  struct grub_nvme_device *nvmedev = grub_malloc (sizeof (*nvmedev));
+  if (!nvmedev)
+    return 0;
+
+  nvmedev->regs = mmio_reg;
+  nvmedev->num = numdevs++;
+
   grub_int32_t max_timeout_ms = ((mmio_reg->cap >> 24) & 0xff) * 500;
   grub_int32_t timeout_ms = max_timeout_ms;
   while (1)
@@ -123,14 +299,17 @@ grub_nvme_pciinit (grub_pci_device_t dev,
     }
 
   timeout_ms = max_timeout_ms;
-  if (create_admin_queues(nvme))
-    goto _free_abort;
+  if (create_admin_queues(nvmedev))
+    {
+      grub_dprintf("nvme", "NVMe ERROR: Failed to create admin queues. FATAL ERROR\n");
+      return 0;
+    }
 
   mmio_reg->controller_config = NVME_CC_EN | NVME_CC_CSS | NVME_CC_MPS | NVME_CC_AMS | NVME_CC_SHN
     | NVME_CC_IOSQES | NVME_CC_IOCQES;
   while (1)
     {
-      status = mmio_reg->controller_status & 0x3;
+      grub_uint8_t status = mmio_reg->controller_status & 0x3;
       if (status == 0x2) {
 	grub_dprintf("nvme", "NVMe ERROR: Failed to enable controller. FATAL ERROR\n");
 	mmio_reg->controller_config = 0;
@@ -147,23 +326,19 @@ grub_nvme_pciinit (grub_pci_device_t dev,
       grub_millisleep(10);
     }
 
-  struct grub_nvme_device *nvmedev = grub_malloc (sizeof (*nvmedev));
-  if (!nvmedev) {
-    mmio_reg->controller_config = 0;
-    return 0;
-  }
-
-  nvmedev->prp_list_chunk = grub_memalign_dma32(0x1000, 0x1000);
-  if (!nvmedev->prp_list_chunk) {
+  nvmedev->prp_list = grub_memalign_dma32(0x1000, 0x1000);
+  if (!nvmedev->prp_list) {
     mmio_reg->controller_config = 0;
     grub_free (nvmedev);
     return 0;
   }
 
-  nvmedev->regs = mmio_reg;
-
   addr = grub_pci_make_address (dev, GRUB_PCI_REG_COMMAND);
   grub_pci_write_word (addr, grub_pci_read_word (addr) | GRUB_PCI_COMMAND_BUS_MASTER);
+
+  create_io_completion_queue(nvmedev);
+  create_io_submission_queue(nvmedev);
+
   
   grub_list_push (GRUB_AS_LIST_P (&grub_nvme_devices),
 		  GRUB_AS_LIST (nvmedev));
@@ -185,7 +360,7 @@ grub_nvme_fini_hw (int noreturn __attribute__ ((unused)))
   for (dev = grub_nvme_devices; dev; dev = dev->next)
     {
       dev->regs->controller_config = 0;
-      grub_dma_free (dev->prp_list_chunk);
+      grub_dma_free (dev->prp_list);
       /* TODO: wait for completition.  */
     }
   return GRUB_ERR_NONE;
@@ -199,7 +374,7 @@ grub_nvme_restore_hw (void)
 
   for (pdev = &grub_nvme_devices; *pdev; pdev = &((*pdev)->next))
     {
-      (*pdev)->prp_list_chunk = grub_memalign_dma32(0x1000, 0x1000);
+      (*pdev)->prp_list = grub_memalign_dma32(0x1000, 0x1000);
       (*pdev)->regs->controller_config = NVME_CC_EN | NVME_CC_CSS | NVME_CC_MPS | NVME_CC_AMS | NVME_CC_SHN
 	| NVME_CC_IOSQES | NVME_CC_IOCQES;
       /* TODO: Error handling.  */
@@ -211,318 +386,124 @@ grub_nvme_restore_hw (void)
 
 
 static int
-grub_ahci_iterate (grub_ata_dev_iterate_hook_t hook, void *hook_data,
-		   grub_disk_pull_t pull)
+grub_nvme_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data,
+		  grub_disk_pull_t pull)
 {
-  struct grub_ahci_device *dev;
+  struct grub_nvme_device *dev;
 
   if (pull != GRUB_DISK_PULL_NONE)
     return 0;
 
-  FOR_LIST_ELEMENTS(dev, grub_ahci_devices)
-    if (hook (GRUB_SCSI_SUBSYSTEM_AHCI, dev->num, hook_data))
-      return 1;
+  FOR_LIST_ELEMENTS(dev, grub_nvme_devices)
+    {
+      char devname[40];
+      /* TODO: Other namespaces.  */
+      grub_snprintf (devname, sizeof (devname),
+		     "nvme%dn%d", dev->num, 1);
+      if (hook (devname, hook_data))
+	return 1;
+    }
 
   return 0;
 }
 
-#if 0
-static int
-find_free_cmd_slot (struct grub_ahci_device *dev)
-{
-  int i;
-  for (i = 0; i < 32; i++)
-    {
-      if (dev->hda->ports[dev->port].command_issue & (1 << i))
-	continue;
-      if (dev->hda->ports[dev->port].sata_active & (1 << i))
-	continue;
-      return i;
-    }
-  return -1;
-}
-#endif
-
-enum
-  {
-    GRUB_AHCI_FIS_REG_H2D = 0x27
-  };
-
-static const int register_map[11] = { 3 /* Features */,
-				      12 /* Sectors */,
-				      4 /* LBA low */,
-				      5 /* LBA mid */,
-				      6 /* LBA high */,
-				      7 /* Device */,
-				      2 /* CMD register */,
-				      13 /* Sectors 48  */,
-				      8 /* LBA48 low */,
-				      9 /* LBA48 mid */,
-				      10 /* LBA48 high */ };
-
 static grub_err_t
-grub_ahci_reset_port (struct grub_ahci_device *dev, int force)
+grub_nvme_open (const char *name, grub_disk_t disk)
 {
-  grub_uint64_t endtime;
+  const char *rest;
+  if (grub_memcmp(name, "nvme", 4) != 0 || !grub_isdigit(name[4]))
+    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not an NVMe disk");
+  int devnum = grub_strtoul (name + 4, &rest, 0);
+  if (*rest != 'n')
+    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not an NVMe disk");
+  int namespace = grub_strtoul (rest + 1, 0, 0);
 
-  dev->hba->ports[dev->port].sata_error = dev->hba->ports[dev->port].sata_error;
+  struct grub_nvme_device *dev;
 
-  if (force || (dev->hba->ports[dev->port].command_issue & 1)
-      || (dev->hba->ports[dev->port].task_file_data & 0x80))
-    {
-      struct grub_disk_ata_pass_through_parms parms2;
-      dev->hba->ports[dev->port].command &= ~GRUB_AHCI_HBA_PORT_CMD_ST;
-      dev->hba->ports[dev->port].command_issue = 0;
-      dev->command_list[0].config = 0;
-      dev->command_table[0].prdt[0].unused = 0;
-      dev->command_table[0].prdt[0].size = 0;
-      dev->command_table[0].prdt[0].data_base = 0;
-
-      endtime = grub_get_time_ms () + 1000;
-      while ((dev->hba->ports[dev->port].command & GRUB_AHCI_HBA_PORT_CMD_CR))
-	if (grub_get_time_ms () > endtime)
-	  {
-	    grub_dprintf ("ahci", "couldn't stop CR");
-	    return grub_error (GRUB_ERR_IO, "couldn't stop CR");
-	  }
-      dev->hba->ports[dev->port].command |= 8;
-      while (dev->hba->ports[dev->port].command & 8)
-	if (grub_get_time_ms () > endtime)
-	  {
-	    grub_dprintf ("ahci", "couldn't set CLO\n");
-	    dev->hba->ports[dev->port].command &= ~GRUB_AHCI_HBA_PORT_CMD_FRE;
-	    return grub_error (GRUB_ERR_IO, "couldn't set CLO");
-	  }
-
-      dev->hba->ports[dev->port].command |= GRUB_AHCI_HBA_PORT_CMD_ST;
-      while (!(dev->hba->ports[dev->port].command & GRUB_AHCI_HBA_PORT_CMD_CR))
-	if (grub_get_time_ms () > endtime)
-	  {
-	    grub_dprintf ("ahci", "couldn't stop CR");
-	    dev->hba->ports[dev->port].command &= ~GRUB_AHCI_HBA_PORT_CMD_ST;
-	    return grub_error (GRUB_ERR_IO, "couldn't stop CR");
-	  }
-      dev->hba->ports[dev->port].sata_error = dev->hba->ports[dev->port].sata_error;
-      grub_memset (&parms2, 0, sizeof (parms2));
-      parms2.taskfile.cmd = 8;
-      return grub_ahci_readwrite_real (dev, &parms2, 1, 1);
-    }
-  return GRUB_ERR_NONE;
-}
-
-static grub_err_t
-grub_ahci_readwrite_real (struct grub_ahci_device *dev,
-			  struct grub_disk_ata_pass_through_parms *parms,
-			  int spinup, int reset)
-{
-  struct grub_pci_dma_chunk *bufc;
-  grub_uint64_t endtime;
-  unsigned i;
-  grub_err_t err = GRUB_ERR_NONE;
-
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  if (!reset)
-    grub_ahci_reset_port (dev, 0);
-
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-  dev->hba->ports[dev->port].task_file_data = 0;
-  dev->hba->ports[dev->port].command_issue = 0;
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  dev->hba->ports[dev->port].sata_error = dev->hba->ports[dev->port].sata_error;
-
-  grub_dprintf("ahci", "grub_ahci_read (size=%llu, cmdsize = %llu)\n",
-	       (unsigned long long) parms->size,
-	       (unsigned long long) parms->cmdsize);
-
-  if (parms->cmdsize != 0 && parms->cmdsize != 12 && parms->cmdsize != 16)
-    return grub_error (GRUB_ERR_BUG, "incorrect ATAPI command size");
-
-  if (parms->size > GRUB_AHCI_PRDT_MAX_CHUNK_LENGTH)
-    return grub_error (GRUB_ERR_BUG, "too big data buffer");
-
-  if (parms->size)
-    bufc = grub_memalign_dma32 (1024, parms->size + (parms->size & 1));
-  else
-    bufc = grub_memalign_dma32 (1024, 512);
-
-  grub_dprintf ("ahci", "AHCI tfd = %x, CL=%p\n",
-		dev->hba->ports[dev->port].task_file_data,
-		dev->command_list);
-  /* FIXME: support port multipliers.  */
-  dev->command_list[0].config
-    = (5 << GRUB_AHCI_CONFIG_CFIS_LENGTH_SHIFT)
-    //    | GRUB_AHCI_CONFIG_CLEAR_R_OK
-    | (0 << GRUB_AHCI_CONFIG_PMP_SHIFT)
-    | ((parms->size ? 1 : 0) << GRUB_AHCI_CONFIG_PRDT_LENGTH_SHIFT)
-    | (parms->cmdsize ? GRUB_AHCI_CONFIG_ATAPI : 0)
-    | (parms->write ? GRUB_AHCI_CONFIG_WRITE : GRUB_AHCI_CONFIG_READ)
-    | (parms->taskfile.cmd == 8 ? (1 << 8) : 0);
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  dev->command_list[0].transferred = 0;
-  dev->command_list[0].command_table_base
-    = grub_dma_get_phys (dev->command_table_chunk);
-
-  grub_memset ((char *) dev->command_list[0].unused, 0,
-	       sizeof (dev->command_list[0].unused));
-
-  grub_memset ((char *) &dev->command_table[0], 0,
-	       sizeof (dev->command_table[0]));
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  if (parms->cmdsize)
-    grub_memcpy ((char *) dev->command_table[0].command, parms->cmd,
-		 parms->cmdsize);
-
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  dev->command_table[0].cfis[0] = GRUB_AHCI_FIS_REG_H2D;
-  dev->command_table[0].cfis[1] = 0x80;
-  for (i = 0; i < sizeof (parms->taskfile.raw); i++)
-    dev->command_table[0].cfis[register_map[i]] = parms->taskfile.raw[i];
-
-  grub_dprintf ("ahci", "cfis: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-		dev->command_table[0].cfis[0], dev->command_table[0].cfis[1],
-		dev->command_table[0].cfis[2], dev->command_table[0].cfis[3],
-		dev->command_table[0].cfis[4], dev->command_table[0].cfis[5],
-		dev->command_table[0].cfis[6], dev->command_table[0].cfis[7]);
-  grub_dprintf ("ahci", "cfis: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-		dev->command_table[0].cfis[8], dev->command_table[0].cfis[9],
-		dev->command_table[0].cfis[10], dev->command_table[0].cfis[11],
-		dev->command_table[0].cfis[12], dev->command_table[0].cfis[13],
-		dev->command_table[0].cfis[14], dev->command_table[0].cfis[15]);
-
-  dev->command_table[0].prdt[0].data_base = grub_dma_get_phys (bufc);
-  dev->command_table[0].prdt[0].unused = 0;
-  dev->command_table[0].prdt[0].size = (parms->size - 1);
-
-  grub_dprintf ("ahci", "PRDT = %" PRIxGRUB_UINT64_T ", %x, %x (%"
-		PRIuGRUB_SIZE ")\n",
-		dev->command_table[0].prdt[0].data_base,
-		dev->command_table[0].prdt[0].unused,
-		dev->command_table[0].prdt[0].size,
-		(grub_size_t) ((char *) &dev->command_table[0].prdt[0]
-			       - (char *) &dev->command_table[0]));
-
-  if (parms->write)
-    grub_memcpy ((char *) grub_dma_get_virt (bufc), parms->buffer, parms->size);
-
-  grub_dprintf ("ahci", "AHCI command scheduled\n");
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-  grub_dprintf ("ahci", "AHCI inten = %x\n",
-		dev->hba->ports[dev->port].inten);
-  grub_dprintf ("ahci", "AHCI intstatus = %x\n",
-		dev->hba->ports[dev->port].intstatus);
-
-  dev->hba->ports[dev->port].inten = 0xffffffff;//(1 << 2) | (1 << 5);
-  dev->hba->ports[dev->port].intstatus = 0xffffffff;//(1 << 2) | (1 << 5);
-  grub_dprintf ("ahci", "AHCI inten = %x\n",
-		dev->hba->ports[dev->port].inten);
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-  dev->hba->ports[dev->port].sata_active = 1;
-  dev->hba->ports[dev->port].command_issue = 1;
-  grub_dprintf ("ahci", "AHCI sig = %x\n", dev->hba->ports[dev->port].sig);
-  grub_dprintf ("ahci", "AHCI tfd = %x\n",
-		dev->hba->ports[dev->port].task_file_data);
-
-  endtime = grub_get_time_ms () + (spinup ? 20000 : 20000);
-  while ((dev->hba->ports[dev->port].command_issue & 1))
-    if (grub_get_time_ms () > endtime ||
-	(dev->hba->ports[dev->port].intstatus & GRUB_AHCI_HBA_PORT_IS_FATAL_MASK))
+  FOR_LIST_ELEMENTS(dev, grub_nvme_devices)
+    if (dev->num == devnum)
       {
-	grub_dprintf ("ahci", "AHCI status <%x %x %x %x>\n",
-		      dev->hba->ports[dev->port].command_issue,
-		      dev->hba->ports[dev->port].sata_active,
-		      dev->hba->ports[dev->port].intstatus,
-		      dev->hba->ports[dev->port].task_file_data);
-	dev->hba->ports[dev->port].command_issue = 0;
-	if (dev->hba->ports[dev->port].intstatus & GRUB_AHCI_HBA_PORT_IS_FATAL_MASK)
-	  err = grub_error (GRUB_ERR_IO, "AHCI transfer error");
-	else
-	  err = grub_error (GRUB_ERR_IO, "AHCI transfer timed out");
-	if (!reset)
-	  grub_ahci_reset_port (dev, 1);
-	break;
+	if (namespace != 1)
+	  return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "unknown NVMe namespace");
+
+	disk->total_sectors = 10000; /* XXX */
+	disk->max_agglomerate = 512;
+
+	disk->log_sector_size = 9; /* XXX */
+	disk->id = (devnum << 8) | namespace;
+	disk->data = dev;
+	return 0;
       }
 
-  grub_dprintf ("ahci", "AHCI command completed <%x %x %x %x %x, %x %x>\n",
-		dev->hba->ports[dev->port].command_issue,
-		dev->hba->ports[dev->port].intstatus,
-		dev->hba->ports[dev->port].task_file_data,
-		dev->command_list[0].transferred,
-		dev->hba->ports[dev->port].sata_error,
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x00],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x18]);
-  grub_dprintf ("ahci",
-		"last PIO FIS %08x %08x %08x %08x %08x %08x %08x %08x\n",
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x08],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x09],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0a],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0b],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0c],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0d],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0e],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x0f]);
-  grub_dprintf ("ahci",
-		"last REG FIS %08x %08x %08x %08x %08x %08x %08x %08x\n",
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x10],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x11],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x12],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x13],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x14],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x15],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x16],
-		((grub_uint32_t *) grub_dma_get_virt (dev->rfis))[0x17]);
+  return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "unknown NVMe disk");
+}
 
-  if (!parms->write)
-    grub_memcpy (parms->buffer, (char *) grub_dma_get_virt (bufc), parms->size);
-  grub_dma_free (bufc);
-
-  return err;
+static void
+grub_nvme_close (grub_disk_t disk)
+{
+  (void) disk;
 }
 
 static grub_err_t
-grub_ahci_readwrite (grub_ata_t disk,
-		     struct grub_disk_ata_pass_through_parms *parms,
-		     int spinup)
+grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
+		grub_size_t size, char *buf)
 {
-  return grub_ahci_readwrite_real (disk->data, parms, spinup, 0);
+  struct grub_nvme_device *dev = disk->data;
+  int namespace = disk->id & 0xff;
+  (void) namespace;
+
+  if (size == 0)
+    return 0;
+
+  if (size > 512)
+    return grub_error(GRUB_ERR_BAD_ARGUMENT, "overlong nvme read");
+
+  /* This assumes virt == phys which is true on platforms where we support nvme.  */
+  grub_uint64_t buffer_phys = (grub_addr_t) buf;
+
+  struct nvme_s_queue_entry e = {
+    .dw[0] = 0x02,
+    .dw[1] = 0x1,
+    .dw[6] = (grub_addr_t) buffer_phys,
+    .dw[7] = (grub_addr_t) (buffer_phys >> 32),
+    .dw[10] = sector,
+    .dw[11] = sector >> 32,
+    .dw[12] = size - 1,
+  };
+
+  const grub_uint64_t start_page = buffer_phys >> 12;
+  const grub_uint64_t end_page = (buffer_phys + size * 512 - 1) >> 12;
+  if (end_page == start_page) {
+    /* No page crossing, PRP2 is reserved */
+  } else if (end_page == start_page + 1) {
+    /* Crossing exactly one page boundary, PRP2 is second page */
+    e.dw[8] = (buffer_phys + 0x1000) & ~0xfff;
+  } else {
+    /* Use a single page as PRP list, PRP2 points to the list */
+    unsigned int i;
+    volatile grub_uint64_t *prp_list = grub_dma_get_virt(dev->prp_list);
+    for (i = 0; i < end_page - start_page; ++i) {
+      buffer_phys += 0x1000;
+      prp_list[i] = buffer_phys & ~0xfff;
+    }
+    e.dw[8] = grub_dma_get_phys(dev->prp_list);
+  }
+
+  return nvme_cmd(dev, ios, &e);
 }
 
 static grub_err_t
-grub_ahci_open (int id, int devnum, struct grub_ata *ata)
+grub_nvme_write (grub_disk_t disk, grub_disk_addr_t sector,
+		 grub_size_t size, const char *buf)
 {
-  struct grub_ahci_device *dev;
-
-  if (id != GRUB_SCSI_SUBSYSTEM_AHCI)
-    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not an AHCI device");
-
-  FOR_LIST_ELEMENTS(dev, grub_ahci_devices)
-    if (dev->num == devnum)
-      break;
-
-  if (! dev)
-    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "no such AHCI device");
-
-  grub_dprintf ("ahci", "opening AHCI dev `ahci%d'\n", dev->num);
-
-  ata->data = dev;
-  ata->dma = 1;
-  ata->atapi = dev->atapi;
-  ata->maxbuffer = GRUB_AHCI_PRDT_MAX_CHUNK_LENGTH;
-  ata->present = &dev->present;
-
-  return GRUB_ERR_NONE;
+  struct grub_nvme_device *dev = disk->data;
+  int namespace = disk->id & 0xff;
+  (void) dev;
+  (void) namespace;
+  (void) sector;
+  (void) size;
+  (void) buf;
+  return 0;
 }
 
 static struct grub_disk_dev grub_nvme_dev =

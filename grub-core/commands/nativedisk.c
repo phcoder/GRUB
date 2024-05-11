@@ -34,7 +34,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 static const char *modnames_def[] = {
   /* FIXME: autogenerate this.  */
 #if defined (__i386__) || defined (__x86_64__) || defined (GRUB_MACHINE_MIPS_LOONGSON)
-  "pata", "ahci", "usbms", "ohci", "uhci", "ehci"
+  "pata", "ahci", "usbms", "ohci", "uhci", "ehci", "nvme"
 #elif defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
   "pata"
 #else
@@ -77,6 +77,7 @@ get_uuid (const char *name, char **uuid, int getnative)
       /* Native disks.  */
     case GRUB_DISK_DEVICE_ATA_ID:
     case GRUB_DISK_DEVICE_SCSI_ID:
+    case GRUB_DISK_DEVICE_NVME_ID:
     case GRUB_DISK_DEVICE_XEN:
       if (getnative)
 	break;
