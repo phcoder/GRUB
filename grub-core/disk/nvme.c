@@ -58,6 +58,19 @@ struct grub_nvme_mmio_reg
   /* 30 */ grub_uint64_t acq;
 };
 
+struct nvme_ident_block
+{
+  /*  0 */ grub_uint64_t nsze;
+  /*  8 */ grub_uint64_t ncap;
+  /* 10 */ grub_uint64_t nuse;
+  /* 18 */ grub_uint8_t nsfeat;
+  /* 19 */ grub_uint8_t nlbaf;
+  /* 1a */ grub_uint8_t flbas;
+  /* 1b */ grub_uint8_t mc;
+  /* 1c */ grub_uint32_t fill[(0x80 - 0x1c) / 4];
+  /* 80 */ grub_uint32_t lbaf[64];
+};
+
 struct grub_nvme_device
 {
   struct grub_nvme_device *next;
@@ -66,7 +79,12 @@ struct grub_nvme_device
   struct grub_pci_dma_chunk *prp_list;
   struct grub_pci_dma_chunk *sq_buffer;
   struct grub_pci_dma_chunk *cq_buffer;
+  struct grub_pci_dma_chunk *ioc_buffer;
+  struct grub_pci_dma_chunk *ios_buffer;
+  struct grub_pci_dma_chunk *ident_buffer;
   int num;
+  grub_uint64_t total_sectors;
+  int log_sector_size;
 
   struct {
     volatile void *base;
@@ -96,7 +114,7 @@ enum nvme_queue {
   ioc = 3,
 };
 
-static grub_err_t
+static int
 nvme_cmd(struct grub_nvme_device *nvme, enum nvme_queue q, const struct nvme_s_queue_entry *cmd)
 {
   int sq = q, cq = q+1;
@@ -112,16 +130,16 @@ nvme_cmd(struct grub_nvme_device *nvme, enum nvme_queue q, const struct nvme_s_q
   while (((*(volatile grub_uint32_t *)(&c_entry->dw[3]) >> 16) & 0x1) == nvme->queue[cq].round)
     {
       if (grub_get_time_ms () > endtime)
-	return grub_error(GRUB_ERR_IO, "timeout waiting for NVMe command completion");
+	{
+	  grub_dprintf("nvme", "command timed out");
+	  return -1;
+	}
     }
   nvme->queue[cq].idx = (nvme->queue[cq].idx + 1) & (NVME_QUEUE_SIZE - 1);
   *nvme->queue[cq].bell = nvme->queue[cq].idx;
   if (nvme->queue[cq].idx == 0)
     nvme->queue[cq].round = (nvme->queue[cq].round + 1) & 1;
-  int io_err = c_entry->dw[3] >> 17;
-  if (io_err)
-    return grub_error(GRUB_ERR_IO, "NVMe error %d", io_err);
-  return GRUB_ERR_NONE;
+  return c_entry->dw[3] >> 17;
 }
 
 static int
@@ -163,17 +181,17 @@ create_admin_queues(struct grub_nvme_device *nvme)
 
 static int create_io_submission_queue(struct grub_nvme_device *nvme)
 {
-  struct grub_pci_dma_chunk *sq_buffer = grub_memalign_dma32(0x1000, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
-  if (!sq_buffer)
+  nvme->ios_buffer = grub_memalign_dma32(0x1000, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!nvme->ios_buffer)
     {
       grub_dprintf("nvme", "NVMe ERROR: Failed to allocate memory for io submission queue.\n");
       return -1;
     }
-  grub_memset((void *) grub_dma_get_virt(sq_buffer), 0, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  grub_memset((void *) grub_dma_get_virt(nvme->ios_buffer), 0, NVME_SQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
 
   struct nvme_s_queue_entry e = {
     .dw[0]  = 0x01,
-    .dw[6]  = grub_dma_get_phys(sq_buffer),
+    .dw[6]  = grub_dma_get_phys(nvme->ios_buffer),
     .dw[10] = ((NVME_QUEUE_SIZE - 1) << 16) | ios >> 1,
     .dw[11] = (1 << 16) | 1,
   };
@@ -181,12 +199,12 @@ static int create_io_submission_queue(struct grub_nvme_device *nvme)
   int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
   if (res) {
     grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
-    grub_dma_free(sq_buffer);
+    grub_dma_free(nvme->ios_buffer);
     return res;
   }
 
   grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
-  nvme->queue[ios].base = sq_buffer;
+  nvme->queue[ios].base = nvme->ios_buffer;
   nvme->queue[ios].bell = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ios * (1 << cap_dstrd));
   nvme->queue[ios].idx = 0;
   return 0;
@@ -194,34 +212,103 @@ static int create_io_submission_queue(struct grub_nvme_device *nvme)
 
 static int create_io_completion_queue(struct grub_nvme_device *nvme)
 {
-  struct grub_pci_dma_chunk *cq_buffer = grub_memalign_dma32(0x1000, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
-  if (!cq_buffer) {
+  nvme->ioc_buffer = grub_memalign_dma32(0x1000, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  if (!nvme->ioc_buffer) {
     grub_dprintf("nvme", "NVMe ERROR: Failed to allocate memory for io completion queue.\n");
     return -1;
   }
-  grub_memset((void *) grub_dma_get_virt(nvme->cq_buffer), 0, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
+  grub_memset((void *) grub_dma_get_virt(nvme->ioc_buffer), 0, NVME_CQ_ENTRY_SIZE * NVME_QUEUE_SIZE);
 
   const struct nvme_s_queue_entry e = {
-		.dw[0]  = 0x05,
-		.dw[6]  = grub_dma_get_phys(cq_buffer),
-		.dw[10] = ((NVME_QUEUE_SIZE - 1) << 16) | ioc >> 1,
-		.dw[11] = 1,
+    .dw[0]  = 0x05,
+    .dw[6]  = grub_dma_get_phys(nvme->ioc_buffer),
+    .dw[10] = ((NVME_QUEUE_SIZE - 1) << 16) | ioc >> 1,
+    .dw[11] = 1,
+  };
+
+  int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
+  if (res)
+    {
+      grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
+      grub_dma_free(nvme->ioc_buffer);
+      return res;
+    }
+
+  grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
+  nvme->queue[ioc].base  = nvme->ioc_buffer;
+  nvme->queue[ioc].bell  = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ioc * (1 << cap_dstrd));
+  nvme->queue[ioc].idx   = 0;
+  nvme->queue[ioc].round = 0;
+
+  return 0;
+}
+
+static int identify(struct grub_nvme_device *nvme)
+{
+  nvme->ident_buffer = grub_memalign_dma32(0x1000, 0x1000);
+  if (!nvme->ident_buffer) {
+    grub_dprintf("nvme", "NVMe ERROR: Failed to allocate ident buffer.\n");
+    return -1;
+  }
+  grub_memset((void *) grub_dma_get_virt(nvme->ident_buffer), 0, 0x1000);
+
+  const struct nvme_s_queue_entry e = {
+    .dw[0]  = 0x06,
+    .dw[1]  = 0x01,
+    .dw[2]  = 0x00,
+    .dw[6]  = grub_dma_get_phys(nvme->ident_buffer),
+    .dw[10] = 0x00,
+  };
+
+  int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
+  if (res)
+    {
+      grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
+      grub_memset((void *) grub_dma_get_virt(nvme->ident_buffer), 0, 0x1000);
+      return res;
+    }
+
+  struct nvme_ident_block *nvme_ident = (void *) grub_dma_get_virt(nvme->ident_buffer);
+  nvme->total_sectors = nvme_ident->nsze;
+  int selected_lbaf = nvme_ident->flbas & 0xf;
+  nvme->log_sector_size = (nvme_ident->lbaf[selected_lbaf] >> 16) & 0xff;
+
+  grub_dprintf("nvme", "Detected disk with %lld sectors of 2^%d bytes each\n", (long long) nvme->total_sectors, nvme->log_sector_size);
+
+  return 0;
+}
+
+static int delete_io_submission_queue(struct grub_nvme_device *nvme)
+{
+	const struct nvme_s_queue_entry e = {
+		.dw[0]  = 0,
+		.dw[10] = ios,
 	};
 
 	int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
-	if (res) {
-	  grub_dprintf("nvme", "NVMe ERROR: nvme_cmd returned with %i.\n", res);
-		grub_dma_free(cq_buffer);
-		return res;
-	}
 
-	grub_uint8_t cap_dstrd = (nvme->regs->cap >> 32) & 0xf;
-	nvme->queue[ioc].base  = cq_buffer;
-	nvme->queue[ioc].bell  = (volatile grub_uint32_t *) nvme->regs + 0x1000 / 4 + (ioc * (1 << cap_dstrd));
+	grub_dma_free(nvme->ios_buffer);
+	nvme->queue[ios].base = NULL;
+	nvme->queue[ios].bell = NULL;
+	nvme->queue[ios].idx  = 0;
+	return res;
+}
+
+static int delete_io_completion_queue(struct grub_nvme_device *nvme)
+{
+	const struct nvme_s_queue_entry e = {
+		.dw[0]  = 1,
+		.dw[10] = ioc,
+	};
+
+	int res = nvme_cmd(nvme, NVME_ADMIN_QUEUE, &e);
+	grub_dma_free(nvme->ioc_buffer);
+
+	nvme->queue[ioc].base  = NULL;
+	nvme->queue[ioc].bell  = NULL;
 	nvme->queue[ioc].idx   = 0;
 	nvme->queue[ioc].round = 0;
-
-	return 0;
+	return res;
 }
 
 static int
@@ -339,6 +426,7 @@ grub_nvme_pciinit (grub_pci_device_t dev,
   create_io_completion_queue(nvmedev);
   create_io_submission_queue(nvmedev);
 
+  identify(nvmedev);
   
   grub_list_push (GRUB_AS_LIST_P (&grub_nvme_devices),
 		  GRUB_AS_LIST (nvmedev));
@@ -359,6 +447,8 @@ grub_nvme_fini_hw (int noreturn __attribute__ ((unused)))
 
   for (dev = grub_nvme_devices; dev; dev = dev->next)
     {
+      delete_io_submission_queue(dev);
+      delete_io_completion_queue(dev);
       dev->regs->controller_config = 0;
       grub_dma_free (dev->prp_list);
       /* TODO: wait for completition.  */
@@ -377,6 +467,8 @@ grub_nvme_restore_hw (void)
       (*pdev)->prp_list = grub_memalign_dma32(0x1000, 0x1000);
       (*pdev)->regs->controller_config = NVME_CC_EN | NVME_CC_CSS | NVME_CC_MPS | NVME_CC_AMS | NVME_CC_SHN
 	| NVME_CC_IOSQES | NVME_CC_IOCQES;
+      create_io_completion_queue(*pdev);
+      create_io_submission_queue(*pdev);
       /* TODO: Error handling.  */
     }
   return GRUB_ERR_NONE;
@@ -426,10 +518,10 @@ grub_nvme_open (const char *name, grub_disk_t disk)
 	if (namespace != 1)
 	  return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "unknown NVMe namespace");
 
-	disk->total_sectors = 10000; /* XXX */
+	disk->total_sectors = dev->total_sectors;
 	disk->max_agglomerate = 512;
 
-	disk->log_sector_size = 9; /* XXX */
+	disk->log_sector_size = dev->log_sector_size;
 	disk->id = (devnum << 8) | namespace;
 	disk->data = dev;
 	return 0;
@@ -445,11 +537,9 @@ grub_nvme_close (grub_disk_t disk)
 }
 
 static grub_err_t
-grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
-		grub_size_t size, char *buf)
+nvme_readwrite (struct grub_nvme_device *dev, int namespace,
+		grub_disk_addr_t sector, grub_size_t size, char *buf, int is_write)
 {
-  struct grub_nvme_device *dev = disk->data;
-  int namespace = disk->id & 0xff;
   (void) namespace;
 
   if (size == 0)
@@ -462,7 +552,7 @@ grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
   grub_uint64_t buffer_phys = (grub_addr_t) buf;
 
   struct nvme_s_queue_entry e = {
-    .dw[0] = 0x02,
+    .dw[0] = is_write ? 0x01 : 0x02,
     .dw[1] = 0x1,
     .dw[6] = (grub_addr_t) buffer_phys,
     .dw[7] = (grub_addr_t) (buffer_phys >> 32),
@@ -472,7 +562,7 @@ grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
   };
 
   const grub_uint64_t start_page = buffer_phys >> 12;
-  const grub_uint64_t end_page = (buffer_phys + size * 512 - 1) >> 12;
+  const grub_uint64_t end_page = (buffer_phys + (size << dev->log_sector_size) - 1) >> 12;
   if (end_page == start_page) {
     /* No page crossing, PRP2 is reserved */
   } else if (end_page == start_page + 1) {
@@ -489,7 +579,20 @@ grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
     e.dw[8] = grub_dma_get_phys(dev->prp_list);
   }
 
-  return nvme_cmd(dev, ios, &e);
+  int io_err = nvme_cmd(dev, ios, &e);
+  if (io_err)
+    return grub_error(GRUB_ERR_IO, "NVMe error %d", io_err);
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_nvme_read (grub_disk_t disk, grub_disk_addr_t sector,
+		grub_size_t size, char *buf)
+{
+  struct grub_nvme_device *dev = disk->data;
+  int namespace = disk->id & 0xff;
+
+  return nvme_readwrite(dev, namespace, sector, size, buf, 0);
 }
 
 static grub_err_t
@@ -498,12 +601,8 @@ grub_nvme_write (grub_disk_t disk, grub_disk_addr_t sector,
 {
   struct grub_nvme_device *dev = disk->data;
   int namespace = disk->id & 0xff;
-  (void) dev;
-  (void) namespace;
-  (void) sector;
-  (void) size;
-  (void) buf;
-  return 0;
+
+  return nvme_readwrite(dev, namespace, sector, size, (char *)buf, 1);
 }
 
 static struct grub_disk_dev grub_nvme_dev =
