@@ -459,10 +459,18 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   grub_file_t file = 0;
   struct linux_arch_kernel_header lh;
   grub_err_t err;
+  int force_legacy = 0;
 
   grub_dl_ref (my_mod);
 
-  if (grub_is_shim_lock_enabled () == true)
+  if (argc > 0 && grub_strcmp(argv[0], "--noefistub") == 0)
+    {
+      force_legacy = 1;
+      argv++;
+      argc--;
+    }
+
+  if (grub_is_shim_lock_enabled () == true || force_legacy)
     {
 #if defined(__i386__) || defined(__x86_64__)
       grub_dprintf ("linux", "shim_lock enabled, falling back to legacy Linux kernel loader\n");
