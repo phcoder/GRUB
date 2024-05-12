@@ -450,7 +450,6 @@ grub_nvme_fini_hw (int noreturn __attribute__ ((unused)))
       delete_io_submission_queue(dev);
       delete_io_completion_queue(dev);
       dev->regs->controller_config = 0;
-      grub_dma_free (dev->prp_list);
       /* TODO: wait for completition.  */
     }
   return GRUB_ERR_NONE;
@@ -464,7 +463,6 @@ grub_nvme_restore_hw (void)
 
   for (pdev = &grub_nvme_devices; *pdev; pdev = &((*pdev)->next))
     {
-      (*pdev)->prp_list = grub_memalign_dma32(0x1000, 0x1000);
       (*pdev)->regs->controller_config = NVME_CC_EN | NVME_CC_CSS | NVME_CC_MPS | NVME_CC_AMS | NVME_CC_SHN
 	| NVME_CC_IOSQES | NVME_CC_IOCQES;
       create_io_completion_queue(*pdev);
