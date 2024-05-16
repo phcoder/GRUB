@@ -71,6 +71,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define ALIGN_PAGE(a)	ALIGN_UP (a, 4096)
 
 static int kernel_type = KERNEL_TYPE_NONE;
+static int do_null_quirk;
 static grub_dl_t my_mod;
 static grub_addr_t entry, entry_hi, kern_start, kern_end;
 static void *kern_chunk_src;
@@ -123,8 +124,11 @@ static const struct grub_arg_option freebsd_opts[] =
     {"dfltroot", 'r', 0, N_("Use compiled-in root device."), 0, 0},
     {"single", 's', 0, N_("Boot into single mode."), 0, 0},
     {"verbose", 'v', 0, N_("Boot with verbose messages."), 0, 0},
+    {"null-quirk", 0, 0, N_("Workaround NULL bug that prevents DragonFlyBSD to boot with coreboot"), 0, 0},
     {0, 0, 0, 0, 0, 0}
   };
+
+#define FREEBSD_NULL_QUIRK_FLAG 14
 
 static const grub_uint32_t freebsd_flags[] =
 {
@@ -132,7 +136,7 @@ static const grub_uint32_t freebsd_flags[] =
   FREEBSD_RB_CDROM, FREEBSD_RB_CONFIG, FREEBSD_RB_KDB,
   FREEBSD_RB_GDB, FREEBSD_RB_MUTE, FREEBSD_RB_NOINTR,
   FREEBSD_RB_PAUSE, FREEBSD_RB_QUIET, FREEBSD_RB_DFLTROOT,
-  FREEBSD_RB_SINGLE, FREEBSD_RB_VERBOSE, 0
+  FREEBSD_RB_SINGLE, FREEBSD_RB_VERBOSE, 0, 0
 };
 
 static const struct grub_arg_option openbsd_opts[] =
@@ -326,8 +330,8 @@ generate_e820_mmap_iter (grub_uint64_t addr, grub_uint64_t size,
   ctx->cur.addr = addr;
   ctx->cur.size = size;
 
-  if (type == GRUB_MEMORY_COREBOOT_TABLES
-      && addr == 0)
+   if (type == GRUB_MEMORY_COREBOOT_TABLES
+       && addr == 0 && do_null_quirk)
       /* Nowadays the tables at 0 don't contain anything important but
        *BSD needs the memory at 0 for own needs.
        */
@@ -925,7 +929,7 @@ grub_freebsd_boot (void)
 	 DragonFlyBSD needs the memory at 0 for own needs.
        */
       if (efi_mmap_size_out >= sizeof(grub_efi_memory_descriptor_t) && efidescs->physical_start == 0
-	  && efidescs->type == GRUB_EFI_RESERVED_MEMORY_TYPE && efidescs->num_pages <= (grub_coreboot_get_zerotables_size() >> GRUB_EFI_PAGE_SHIFT))
+	  && efidescs->type == GRUB_EFI_RESERVED_MEMORY_TYPE && do_null_quirk && efidescs->num_pages <= (grub_coreboot_get_zerotables_size() >> GRUB_EFI_PAGE_SHIFT))
 	{
 	  efidescs->type = GRUB_EFI_CONVENTIONAL_MEMORY;
 	}
@@ -1852,6 +1856,7 @@ grub_cmd_freebsd (grub_extcmd_context_t ctxt, int argc, char *argv[])
 {
   kernel_type = KERNEL_TYPE_FREEBSD;
   bootflags = grub_bsd_parse_flags (ctxt->state, freebsd_flags);
+  do_null_quirk = ctxt->state[FREEBSD_NULL_QUIRK_FLAG].set;
 
   if (grub_bsd_load (argc, argv) == GRUB_ERR_NONE)
     {
@@ -1932,6 +1937,7 @@ grub_cmd_openbsd (grub_extcmd_context_t ctxt, int argc, char *argv[])
 
   kernel_type = KERNEL_TYPE_OPENBSD;
   bootflags = grub_bsd_parse_flags (ctxt->state, openbsd_flags);
+  do_null_quirk = 0;
 
   if (ctxt->state[OPENBSD_ROOT_ARG].set && ctxt->state[OPENBSD_ROOT_ARG].arg != NULL)
     {
@@ -2026,6 +2032,7 @@ grub_cmd_netbsd (grub_extcmd_context_t ctxt, int argc, char *argv[])
   grub_err_t err;
   kernel_type = KERNEL_TYPE_NETBSD;
   bootflags = grub_bsd_parse_flags (ctxt->state, netbsd_flags);
+  do_null_quirk = 0;
 
   if (grub_bsd_load (argc, argv) == GRUB_ERR_NONE)
     {
