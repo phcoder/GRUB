@@ -1038,6 +1038,9 @@ static void
 grub_gfxterm_gotoxy (struct grub_term_output *term __attribute__ ((unused)),
 		     struct grub_term_coordinate pos)
 {
+  if (!virtual_screen.functional)
+    return;
+
   if (pos.x >= virtual_screen.columns)
     pos.x = virtual_screen.columns - 1;
 
@@ -1071,6 +1074,9 @@ static void
 grub_gfxterm_cls (struct grub_term_output *term)
 {
   grub_video_color_t color;
+
+  if (!virtual_screen.functional)
+    return;
 
   /* Clear virtual screen.  */
   grub_virtual_screen_cls (term);
@@ -1118,6 +1124,9 @@ static void
 grub_gfxterm_setcursor (struct grub_term_output *term __attribute__ ((unused)),
 			int on)
 {
+  if (!virtual_screen.functional)
+    return;
+
   if (virtual_screen.cursor_state != on)
     {
       if (virtual_screen.cursor_state)
@@ -1132,6 +1141,9 @@ grub_gfxterm_setcursor (struct grub_term_output *term __attribute__ ((unused)),
 static void
 grub_gfxterm_refresh (struct grub_term_output *term __attribute__ ((unused)))
 {
+  if (!virtual_screen.functional)
+    return;
+
   real_scroll ();
 
   /* Redraw only changed regions.  */
