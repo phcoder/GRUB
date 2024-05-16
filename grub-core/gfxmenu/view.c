@@ -539,7 +539,7 @@ init_terminal (grub_gfxmenu_view_t view)
   /* Note: currently there is no API for changing the gfxterm font
      on the fly, so whatever font the initially loaded theme specifies
      will be permanent.  */
-  grub_gfxterm_set_window (GRUB_VIDEO_RENDER_TARGET_DISPLAY,
+  grub_err_t err = grub_gfxterm_set_window (GRUB_VIDEO_RENDER_TARGET_DISPLAY,
                            view->terminal_rect.x,
                            view->terminal_rect.y,
                            view->terminal_rect.width,
@@ -547,6 +547,9 @@ init_terminal (grub_gfxmenu_view_t view)
                            view->double_repaint,
                            terminal_font,
                            view->terminal_border);
+  if (err)
+    return;
+
   grub_gfxterm_decorator_hook = grub_gfxmenu_draw_terminal_box;
 }
 
