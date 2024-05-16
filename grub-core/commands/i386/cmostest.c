@@ -106,23 +106,18 @@ static grub_err_t
 grub_cmd_cmoswrite (struct grub_command *cmd __attribute__ ((unused)),
 		    int argc, char *argv[])
 {
-  int byte = -1, value = -1;
+  unsigned long byte, value;
+  const char *end;
 
   if (argc != 2)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("two arguments expected"));
 
-  byte = grub_strtoul (argv[0], NULL, 0);
-  if (grub_errno)
-    return grub_errno;
-
-  if (byte < 0 || byte >= 0x100)
+  byte = grub_strtoul (argv[0], &end, 0);
+  if (byte >= 0x100 || argv[0][0] == '\0' || *end != '\0')
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid address"));
 
-  value = grub_strtoul (argv[1], NULL, 0);
-  if (grub_errno)
-    return grub_errno;
-
-  if (value < 0 || value >= 0x100)
+  value = grub_strtoul (argv[1], &end, 0);
+  if (value >= 0x100 || argv[1][0] == '\0' || *end != '\0')
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid value"));
 
   return grub_cmos_write (byte, value);
@@ -131,18 +126,16 @@ grub_cmd_cmoswrite (struct grub_command *cmd __attribute__ ((unused)),
 static grub_err_t
 grub_cmd_cmosread (grub_extcmd_context_t ctxt, int argc, char **argv)
 {
-  int byte = -1;
+  unsigned long byte;
   grub_uint8_t value = 0;
   grub_err_t err;
+  const char *end;
 
   if (argc != 1)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected"));
 
-  byte = grub_strtoul (argv[0], NULL, 0);
-  if (grub_errno)
-    return grub_errno;
-
-  if (byte < 0 || byte >= 0x100)
+  byte = grub_strtoul (argv[0], &end, 0);
+  if (byte >= 0x100 || argv[0][0] == '\0' || *end != '\0')
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid address"));
 
   err = grub_cmos_read (byte, &value);
@@ -154,13 +147,13 @@ grub_cmd_cmosread (grub_extcmd_context_t ctxt, int argc, char **argv)
     grub_snprintf (buf, sizeof (buf), "%x", value);
     grub_env_set(ctxt->state[2].arg, buf);
   } else
-    grub_printf_("CMOS value at 0x%x is 0x%x\n", byte, value);
+    grub_printf_("CMOS value at 0x%lx is 0x%x\n", byte, value);
   return GRUB_ERR_NONE;
 }
 
 static const struct grub_arg_option read_options[] =
   {
-    {0, 'v', 0, N_("Save read value into variable VARNAME."),
+    {0, 's', 0, N_("Save read value into variable VARNAME."),
      N_("VARNAME"), ARG_TYPE_STRING},
     {0, 0, 0, 0, 0, 0}
   };
@@ -182,7 +175,7 @@ GRUB_MOD_INIT(cmostest)
 				   /* TRANSLATORS: A bit may be either set (1) or clear (0).  */
 				   N_("Set bit at BYTE:BIT in CMOS."));
   cmd_read = grub_register_extcmd_lockdown ("cmosread", grub_cmd_cmosread, 0,
-				       N_("[-v VAR] ADDR"),
+				       N_("[-s VAR] ADDR"),
 				       N_("Read CMOS byte at ADDR."), read_options);
   cmd_write = grub_register_command_lockdown ("cmoswrite", grub_cmd_cmoswrite,
 					      N_("ADDR VALUE"),
