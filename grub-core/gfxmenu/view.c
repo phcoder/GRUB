@@ -524,12 +524,7 @@ init_terminal (grub_gfxmenu_view_t view)
 {
   grub_font_t terminal_font;
 
-  terminal_font = grub_font_get (view->terminal_font_name);
-  if (!terminal_font)
-    {
-      grub_error (GRUB_ERR_BAD_FONT, "no font loaded");
-      return;
-    }
+  terminal_font = grub_font_get_no_fallback (view->terminal_font_name);
 
   /* Check that terminal window size and position are sane. */
   terminal_sanity_check (view);
