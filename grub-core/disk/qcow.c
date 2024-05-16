@@ -1,7 +1,7 @@
-/* loopback.c - command to add loopback devices.  */
+/* qcow.c - command to add loopback qcow devices.  */
 /*
  *  GRUB  --  GRand Unified Bootloader
- *  Copyright (C) 2005,2006,2007  Free Software Foundation, Inc.
+ *  Copyright (C) 2024  Free Software Foundation, Inc.
  *
  *  GRUB is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
