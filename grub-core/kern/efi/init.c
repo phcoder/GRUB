@@ -39,12 +39,6 @@ static grub_efi_char16_t stack_chk_fail_msg[] =
 
 static grub_guid_t rng_protocol_guid = GRUB_EFI_RNG_PROTOCOL_GUID;
 
-/*
- * Don't put this on grub_efi_init()'s local stack to avoid it
- * getting a stack check.
- */
-static grub_efi_uint8_t stack_chk_guard_buf[32];
-
 /* Initialize canary in case there is no RNG protocol. */
 grub_addr_t __stack_chk_guard = (grub_addr_t) GRUB_STACK_PROTECTOR_INIT;
 grub_addr_t _stack_chk_guard = (grub_addr_t) GRUB_STACK_PROTECTOR_INIT;
@@ -78,14 +72,8 @@ __stack_chk_fail (void)
   while (1);
 }
 
-void __attribute__ ((noreturn))
-_stack_chk_fail (void)
-{
-  __stack_chk_fail ();
-}
-
-static void
-stack_protector_init (void)
+grub_addr_t
+grub_stack_protector_init (void)
 {
   grub_efi_rng_protocol_t *rng;
 
@@ -94,33 +82,26 @@ stack_protector_init (void)
   if (rng != NULL)
     {
       grub_efi_status_t status;
+      grub_addr_t guard = 0;
 
-      status = rng->get_rng (rng, NULL, sizeof (stack_chk_guard_buf),
-			     stack_chk_guard_buf);
-      if (status == GRUB_EFI_SUCCESS) {
-	grub_memcpy (&__stack_chk_guard, stack_chk_guard_buf, sizeof (__stack_chk_guard));
-	grub_memcpy (&_stack_chk_guard, stack_chk_guard_buf, sizeof (_stack_chk_guard));
-      }
+      status = rng->get_rng (rng, NULL, sizeof (guard) - 1,
+		             (grub_efi_uint8_t *) &guard);
+      if (status == GRUB_EFI_SUCCESS)
+	return guard;
     }
-}
-#else
-static void
-stack_protector_init (void)
-{
+  return 0;
 }
 #endif
 
 grub_addr_t grub_modbase;
 
-__attribute__ ((__optimize__ ("-fno-stack-protector"))) void
+void
 grub_efi_init (void)
 {
   grub_modbase = grub_efi_section_addr ("mods");
   /* First of all, initialize the console so that GRUB can display
      messages.  */
   grub_console_init ();
-
-  stack_protector_init ();
 
   /* Initialize the memory management system.  */
   grub_efi_mm_init ();

@@ -81,8 +81,12 @@ struct grub_acpi_fadt
 
 #define GRUB_ACPI_MADT_SIGNATURE "APIC"
 
+<<<<<<< HEAD
 /* Note: here GRUB_PACKED is not needed only because we only
    have uint8_t here.  */
+=======
+/* Note: here GRUB_PACKED is not needed because we have grub_uint8_t only. */
+>>>>>>> master
 struct grub_acpi_madt_entry_header
 {
   grub_uint8_t type;
