@@ -142,11 +142,13 @@ grub_cmd_cmosread (grub_extcmd_context_t ctxt, int argc, char **argv)
   if (err)
     return err;
 
-  if (ctxt->state[2].set) {
-    char buf[sizeof ("XX")];
-    grub_snprintf (buf, sizeof (buf), "%x", value);
-    grub_env_set(ctxt->state[2].arg, buf);
-  } else
+  if (ctxt->state[0].set)
+    {
+      char buf[sizeof ("XX")];
+      grub_snprintf (buf, sizeof (buf), "%x", value);
+      grub_env_set(ctxt->state[0].arg, buf);
+    }
+  else
     grub_printf_("CMOS value at 0x%lx is 0x%x\n", byte, value);
   return GRUB_ERR_NONE;
 }
