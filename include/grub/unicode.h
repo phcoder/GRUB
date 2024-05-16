@@ -281,6 +281,8 @@ grub_unicode_get_comb (const struct grub_unicode_glyph *in)
 static inline void
 grub_unicode_destroy_glyph (struct grub_unicode_glyph *glyph)
 {
+  if (!glyph)
+    return;
   if (glyph->ncomb > ARRAY_SIZE (glyph->combining_inline))
     grub_free (glyph->combining_ptr);
   glyph->ncomb = 0;
