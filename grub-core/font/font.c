@@ -904,12 +904,8 @@ remove_font (grub_font_t font)
     }
 }
 
-/* Get a font from the list of loaded fonts.  This function will return
-   another font if the requested font is not available.  If no fonts are
-   loaded, then a special 'null font' is returned, which contains no glyphs,
-   but is not a null pointer so the caller may omit checks for NULL.  */
 grub_font_t
-grub_font_get (const char *font_name)
+grub_font_get_no_fallback (const char *font_name)
 {
   struct grub_font_node *node;
 
@@ -919,6 +915,21 @@ grub_font_get (const char *font_name)
       if (grub_strcmp (font->name, font_name) == 0)
 	return font;
     }
+
+  return NULL;
+}
+
+/* Get a font from the list of loaded fonts.  This function will return
+   another font if the requested font is not available.  If no fonts are
+   loaded, then a special 'null font' is returned, which contains no glyphs,
+   but is not a null pointer so the caller may omit checks for NULL.  */
+grub_font_t
+grub_font_get (const char *font_name)
+{
+  grub_font_t font = grub_font_get_no_fallback (font_name);
+
+  if (font)
+    return font;
 
   /* If no font by that name is found, return the first font in the list
      as a fallback.  */

@@ -107,6 +107,8 @@ grub_font_t EXPORT_FUNC(grub_font_load) (const char *filename);
    is returned as a fallback.  */
 grub_font_t EXPORT_FUNC (grub_font_get) (const char *font_name);
 
+grub_font_t EXPORT_FUNC(grub_font_get_no_fallback) (const char *font_name);
+					
 const char *EXPORT_FUNC (grub_font_get_name) (grub_font_t font);
 
 int EXPORT_FUNC (grub_font_get_max_char_width) (grub_font_t font);
