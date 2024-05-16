@@ -293,12 +293,56 @@ grub_gfxterm_schedule_repaint (void)
   repaint_scheduled = 1;
 }
 
+static int
+font_validate (grub_font_t font, int width, int height)
+{
+  int normal_char_width = calculate_normal_character_width (font);
+  int normal_char_height = grub_font_get_max_char_height (font);
+  if (normal_char_height == 0)
+    normal_char_height = 16;
+  if (normal_char_width == 0)
+    normal_char_width = 8;
+
+  /* Calculate size of text buffer.  */
+  int columns = width / normal_char_width;
+  int rows = height / normal_char_height;
+
+  return columns >= 40 && rows >= 12;
+}
+
 grub_err_t
 grub_gfxterm_set_window (struct grub_video_render_target *target,
 			 int x, int y, int width, int height,
 			 int double_repaint,
 			 grub_font_t font, int border_width)
 {
+  if (!font)
+    {
+      const char *font_name;
+      /* Select the font to use.  */
+      font_name = grub_env_get ("gfxterm_font");
+      if (! font_name)
+	font_name = "";   /* Allow fallback to any font.  */
+
+      font = grub_font_get_no_fallback (font_name);
+    }
+
+  if (!font || !font_validate(font, width, height))
+    {
+      struct grub_font_node *node;
+
+      font = NULL;
+
+      for (node = grub_font_list; node; node = node->next)
+	if (font_validate(node->value, width, height))
+	  font = node->value;
+
+      if (!font)
+	font = grub_font_get("");
+    }
+  if (!font)
+    return grub_error (GRUB_ERR_BAD_FONT, "no font loaded");
+
   /* Clean up any prior instance.  */
   destroy_window ();
 
@@ -331,12 +375,10 @@ grub_gfxterm_set_window (struct grub_video_render_target *target,
 static grub_err_t
 grub_gfxterm_fullscreen (void)
 {
-  const char *font_name;
   struct grub_video_mode_info mode_info;
   grub_video_color_t color;
   grub_err_t err;
   int double_redraw;
-  grub_font_t font;
 
   err = grub_video_get_info (&mode_info);
   /* Figure out what mode we ended up.  */
@@ -357,21 +399,13 @@ grub_gfxterm_fullscreen (void)
       grub_video_fill_rect (color, 0, 0, mode_info.width, mode_info.height);
     }
 
-  /* Select the font to use.  */
-  font_name = grub_env_get ("gfxterm_font");
-  if (! font_name)
-    font_name = "";   /* Allow fallback to any font.  */
-
-  font = grub_font_get (font_name);
-  if (!font)
-    return grub_error (GRUB_ERR_BAD_FONT, "no font loaded");
 
   grub_gfxterm_decorator_hook = NULL;
 
   return grub_gfxterm_set_window (GRUB_VIDEO_RENDER_TARGET_DISPLAY,
 				  0, 0, mode_info.width, mode_info.height,
 				  double_redraw,
-				  font, DEFAULT_BORDER_WIDTH);
+				  NULL, DEFAULT_BORDER_WIDTH);
 }
 
 static grub_err_t
