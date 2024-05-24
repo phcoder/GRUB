@@ -1,0 +1,37 @@
+--- a/grub-core/lib/libgcrypt-grub/mpi/ec.c	2024-05-24 22:13:07.751623657 +0300
++++ b/grub-core/lib/libgcrypt-grub/mpi/ec.c	2024-05-24 22:11:19.364316929 +0300
+@@ -43,7 +43,7 @@
+ void
+ _gcry_mpi_point_log (const char *name, mpi_point_t point, mpi_ec_t ctx)
+ {
+-  gcry_mpi_t x, y;
++  gcry_mpi_t x = 0, y = 0;
+   char buf[100];
+ 
+   if (!point)
+@@ -583,7 +583,7 @@
+ static void
+ ec_secp256k1_mod (gcry_mpi_t w, mpi_ec_t ctx)
+ {
+-  mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
++#define wsize ((256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB)
+   mpi_limb_t n[wsize + 1];
+   mpi_limb_t s[wsize + 1];
+   mpi_limb_t cy, borrow;
+@@ -823,15 +823,7 @@
+            gcry_mpi_t p, gcry_mpi_t a, gcry_mpi_t b)
+ {
+   int i;
+-  static int use_barrett;
+-
+-  if (!use_barrett)
+-    {
+-      if (getenv ("GCRYPT_BARRETT"))
+-        use_barrett = 1;
+-      else
+-        use_barrett = -1;
+-    }
++  static int use_barrett = -1;
+ 
+   /* Fixme: Do we want to check some constraints? e.g.  a < p  */
+ 

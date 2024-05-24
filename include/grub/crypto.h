@@ -90,6 +90,12 @@ typedef enum
     GPG_ERR_EOF,
     GPG_ERR_BAD_DATA,
     GPG_ERR_EINVAL,
+    GPG_ERR_BAD_CRYPT_CTX,
+    GPG_ERR_NO_SECKEY,
+    GPG_ERR_BROKEN_PUBKEY,
+    GPG_ERR_UNKNOWN_CURVE,
+    GPG_ERR_BUG,
+    GPG_ERR_UNKNOWN_NAME,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
@@ -475,6 +481,7 @@ extern struct gcry_pk_spec *grub_crypto_pk_dsa;
 extern struct gcry_pk_spec *grub_crypto_pk_ecdsa;
 extern struct gcry_pk_spec *grub_crypto_pk_ecdh;
 extern struct gcry_pk_spec *grub_crypto_pk_rsa;
+extern struct gcry_pk_spec *grub_crypto_pk_ecc;
 
 void
 grub_crypto_hash (const gcry_md_spec_t *hash, void *out, const void *in,
@@ -548,6 +555,7 @@ void _gcry_assert_failed (const char *expr, const char *file, int line,
 
 void _gcry_burn_stack (int bytes);
 void _gcry_log_error( const char *fmt, ... )  __attribute__ ((format (__printf__, 1, 2)));
+void _gcry_log_fatal( const char *fmt, ... )  __attribute__ ((format (__printf__, 1, 2), noreturn));
 void _gcry_log_info (const char *fmt, ...);
 void __gcry_burn_stack (unsigned int size);
 void __gcry_burn_stack_dummy (void);

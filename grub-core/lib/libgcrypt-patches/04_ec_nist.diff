@@ -1,0 +1,85 @@
+--- a/grub-core/lib/libgcrypt-grub/mpi/ec-nist.c	2024-05-24 22:36:10.405808715 +0300
++++ b/grub-core/lib/libgcrypt-grub/mpi/ec-nist.c	2024-05-24 22:41:19.477316537 +0300
+@@ -35,6 +35,7 @@
+ #include "ec-context.h"
+ #include "ec-inline.h"
+ #include "const-time.h"
++#include "ec-internal.h"
+ 
+ 
+ static inline
+@@ -90,7 +91,7 @@
+   };
+   const mpi_limb64_t zero = LIMB_TO64(0);
+   mpi_ptr_t wp;
+-  mpi_size_t wsize = 192 / BITS_PER_MPI_LIMB64;
++#define wsize (192 / BITS_PER_MPI_LIMB64)
+   mpi_limb64_t s[wsize + 1];
+   mpi_limb64_t o[wsize + 1];
+   mpi_limb_t mask1;
+@@ -152,6 +153,7 @@
+ 
+   w->nlimbs = 192 / BITS_PER_MPI_LIMB;
+   MPN_NORMALIZE (wp, w->nlimbs);
++#undef wsize
+ }
+ 
+ void
+@@ -182,7 +184,7 @@
+   };
+   const mpi_limb64_t zero = LIMB_TO64(0);
+   mpi_ptr_t wp;
+-  mpi_size_t wsize = (224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
++#define wsize ((224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64)
+   mpi_size_t psize = ctx->p->nlimbs;
+   mpi_limb64_t s[wsize];
+   mpi_limb64_t d[wsize];
+@@ -276,6 +278,7 @@
+ 
+   w->nlimbs = wsize * LIMBS_PER_LIMB64;
+   MPN_NORMALIZE (wp, w->nlimbs);
++#undef wsize
+ }
+ 
+ void
+@@ -341,7 +344,7 @@
+   };
+   const mpi_limb64_t zero = LIMB_TO64(0);
+   mpi_ptr_t wp;
+-  mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
++#define wsize ((256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64)
+   mpi_size_t psize = ctx->p->nlimbs;
+   mpi_limb64_t s[wsize + 1];
+   mpi_limb64_t t[wsize + 1];
+@@ -515,6 +518,7 @@
+ 
+   w->nlimbs = wsize * LIMBS_PER_LIMB64;
+   MPN_NORMALIZE (wp, w->nlimbs);
++#undef wsize
+ }
+ 
+ void
+@@ -591,7 +595,7 @@
+   };
+   const mpi_limb64_t zero = LIMB_TO64(0);
+   mpi_ptr_t wp;
+-  mpi_size_t wsize = (384 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
++#define wsize ((384 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64)
+   mpi_size_t psize = ctx->p->nlimbs;
+ #if (BITS_PER_MPI_LIMB64 == BITS_PER_MPI_LIMB) && defined(WORDS_BIGENDIAN)
+   mpi_limb_t wp_shr32[wsize * LIMBS_PER_LIMB64];
+@@ -782,12 +786,13 @@
+ #if (BITS_PER_MPI_LIMB64 == BITS_PER_MPI_LIMB) && defined(WORDS_BIGENDIAN)
+   wipememory(wp_shr32, sizeof(wp_shr32));
+ #endif
++#undef wsize
+ }
+ 
+ void
+ _gcry_mpi_ec_nist521_mod (gcry_mpi_t w, mpi_ec_t ctx)
+ {
+-  mpi_size_t wsize = (521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
++#define wsize ((521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB)
+   mpi_limb_t s[wsize];
+   mpi_limb_t cy;
+   mpi_ptr_t wp;

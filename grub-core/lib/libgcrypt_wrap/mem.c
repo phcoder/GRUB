@@ -119,6 +119,12 @@ _gcry_check_heap (const void *a __attribute__ ((unused)))
 
 }
 
+void
+_gcry_log_printmpi (const char *text, gcry_mpi_t mpi)
+{
+  _gcry_log_printf("should dump mpi %p with text %s\n", mpi, text);
+}
+
 void _gcry_log_printf (const char *fmt, ...)
 {
   va_list args;
@@ -165,6 +171,18 @@ void _gcry_log_bug (const char *fmt, ...)
   va_end (args);
   grub_refresh ();
   grub_fatal ("gcrypt bug");
+}
+
+void _gcry_log_fatal (const char *fmt, ...)
+{
+  va_list args;
+
+  grub_printf ("gcrypt fatal: ");
+  va_start (args, fmt);
+  grub_vprintf (fmt, args);
+  va_end (args);
+  grub_refresh ();
+  grub_fatal ("gcrypt fatal");
 }
 
 gcry_err_code_t

@@ -26,7 +26,7 @@
 
 #include "g10lib.h"
 #include "mpi.h"
-#include "mpi-internal.h"
+#include "../mpi/mpi-internal.h"
 #include "cipher.h"
 #include "context.h"
 #include "ec-context.h"

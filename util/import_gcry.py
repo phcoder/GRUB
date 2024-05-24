@@ -121,6 +121,7 @@ cryptolist.write ("CRC64: crc64\n");
 extra_files = {
     "gcry_camellia": ["camellia.c"], # Main file is camellia-glue.c
     "gcry_sha512"  : ["hash-common.c"],
+    "gcry_ecc": ["ecc-curves.c", "ecc-sm2.c", "ecc-misc.c", "ecc-eddsa.c", "ecc-ecdsa.c", "ecc-gost.c"]
 }
 extra_files_list = [x for xs in extra_files.values() for x in xs] + ["pubkey-util.c", "rsa-common.c", "dsa-common.c", "md.c"]
 
@@ -139,7 +140,7 @@ for cipher_file in cipher_files:
         chlog = "%s%s: Removed\n" % (chlog, chlognew)
         continue
     # TODO: Support chacha20 and poly1305
-    if cipher_file in ["chacha20.c", "ecc.c", "elgamal.c"]:
+    if cipher_file in ["chacha20.c", "elgamal.c"]:
         chlog = "%s%s: Removed\n" % (chlog, chlognew)
         continue        
     # TODO: Use optimized versions
@@ -255,7 +256,7 @@ for cipher_file in cipher_files:
                 hold = False
                 # We're optimising for size and exclude anything needing good
                 # randomness.
-                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffers|_gcry_sha1_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_dsa_gen_rfc6979_k|bits2octets|int2octets|md_extract|_gcry_md_debug|_gcry_md_selftest|_gcry_md_is_enabled|_gcry_md_is_secure|_gcry_md_init|_gcry_md_info|_gcry_md_get_algo|md_get_algo|_gcry_md_get|_gcry_md_extract|_gcry_md_setkey|md_setkey|prepare_macpads|_gcry_md_algo_name|search_oid|spec_from_oid|spec_from_name|spec_from_algo|map_algo)", line) is not None:
+                if re.match ("(_gcry_hash_selftest_check_one|bulk_selftest_setkey|run_selftests|do_tripledes_set_extra_info|selftest|sm4_selftest|_gcry_[a-z0-9_]*_hash_buffers|_gcry_sha1_hash_buffer|tripledes_set2keys|_gcry_rmd160_mixblock|serpent_test|_gcry_ecc_sm2_encrypt|ecc_encrypt_raw|dsa_generate_ext|test_keys|test_ecdh_only_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|nist_generate_key|dsa_generate|dsa_sign|_gcry_ecc_ecdsa_sign|_gcry_ecc_sm2_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|ec2os|ecc_generate_ext|ecc_generate|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_dsa_gen_rfc6979_k|bits2octets|int2octets|md_extract|_gcry_md_debug|_gcry_md_selftest|_gcry_md_is_enabled|_gcry_md_is_secure|_gcry_md_init|_gcry_md_info|_gcry_md_get_algo|md_get_algo|_gcry_md_get|_gcry_md_extract|_gcry_md_setkey|md_setkey|prepare_macpads|_gcry_md_algo_name|search_oid|spec_from_oid|spec_from_name|spec_from_algo|map_algo)", line) is not None:
 
                     skip = 1
                     if not re.match ("selftest", line) is None and cipher_file == "idea.c":
@@ -278,6 +279,8 @@ for cipher_file in cipher_files:
                         fw.write ("#define rsa_sign 0");
                     if not re.match ("rsa_decrypt", line) is None:
                         fw.write ("#define rsa_decrypt 0");
+                    if not re.match ("ecc_encrypt_raw", line) is None:
+                        fw.write ("#define ecc_encrypt_raw 0");
                     if not re.match ("dsa_sign", line) is None:
                         fw.write ("#define dsa_sign 0");
                     if not re.match ("ecc_sign", line) is None:
@@ -342,7 +345,7 @@ for cipher_file in cipher_files:
                 ismd = True
                 mdarg = 0
                 iscryptostart = True
-            m = re.match (r"static const char \*selftest.*;$", line)
+            m = re.match (r"static (const char \*|int |void )(selftest|test_keys|test_ecdh_only_keys).*;$", line)
             if not m is None:
                 fname = line[len (r"static const char \*"):]
                 fname = re.match ("[a-zA-Z0-9_]*", fname).group ()
@@ -525,6 +528,8 @@ for cipher_file in cipher_files:
                     confutil.write ("  common = grub-core/lib/libgcrypt-grub/cipher/%s;\n" % src)
             if modname == "gcry_ecc":
                 conf.write ("  common = lib/libgcrypt-grub/mpi/ec.c;\n")
+                conf.write ("  common = lib/libgcrypt-grub/mpi/ec-nist.c;\n")
+                conf.write ("  common = lib/libgcrypt-grub/src/context.c;\n")
                 conf.write ("  cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';\n")
             elif modname == "gcry_rijndael" or modname == "gcry_md4" or modname == "gcry_md5" or modname == "gcry_rmd160" or modname == "gcry_sha1" or modname == "gcry_sha256" or modname == "gcry_sha512" or modname == "gcry_tiger":
                 # Alignment checked by hand
