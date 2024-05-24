@@ -6,8 +6,8 @@ Date:   Sun Apr 7 06:33:11 2024 +0300
 
 diff --git a/grub-core/lib/libgcrypt/cipher/keccak.c b/grub-core/lib/libgcrypt/cipher/keccak.c
 index 11e64b3e7..8b570263b 100644
---- a/grub-core/lib/libgcrypt/cipher/keccak.c
-+++ b/grub-core/lib/libgcrypt/cipher/keccak.c
+--- a/grub-core/lib/libgcrypt-grub/cipher/keccak.c
++++ b/grub-core/lib/libgcrypt-grub/cipher/keccak.c
 @@ -251,7 +251,7 @@ keccak_absorb_lane32bi(u32 *lane, u32 x0, u32 x1)
  /* Construct generic 64-bit implementation. */
  #ifdef USE_64BIT
