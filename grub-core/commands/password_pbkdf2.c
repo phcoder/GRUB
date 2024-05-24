@@ -37,6 +37,7 @@ struct pbkdf2_password
   unsigned int c;
   grub_uint8_t *expected;
   grub_size_t buflen;
+  char *hash;
 };
 
 static grub_err_t
@@ -47,9 +48,15 @@ check_password (const char *user, const char *entered, void *pin)
   gcry_err_code_t err;
   grub_err_t ret;
 
+  const struct gcry_md_spec *md = pass->hash ? grub_crypto_lookup_md_by_name(pass->hash) : GRUB_MD_SHA512;
+
+  if (!md)
+    return GRUB_ACCESS_DENIED;
+
   buf = grub_malloc (pass->buflen);
   if (!buf)
     return grub_crypto_gcry_error (GPG_ERR_OUT_OF_MEMORY);
+
 
   err = grub_crypto_pbkdf2 (GRUB_MD_SHA512, (grub_uint8_t *) entered,
 			    grub_strlen (entered),
@@ -93,24 +100,39 @@ grub_cmd_password (grub_command_t cmd __attribute__ ((unused)),
   if (argc != 2)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("two arguments expected"));
 
-  if (grub_memcmp (args[1], "grub.pbkdf2.sha512.",
-		   sizeof ("grub.pbkdf2.sha512.") - 1) != 0)
+  if (grub_memcmp (args[1], "grub.pbkdf2.",
+		   sizeof ("grub.pbkdf2.") - 1) != 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid PBKDF2 password"));
 
-  ptr = args[1] + sizeof ("grub.pbkdf2.sha512.") - 1;
+  ptr = args[1] + sizeof ("grub.pbkdf2.") - 1;
 
   pass = grub_malloc (sizeof (*pass));
   if (!pass)
     return grub_errno;
 
+  const char *hptr = ptr;
+  ptr = grub_strchr(hptr, '.');
+  if (!ptr)
+    {
+      grub_free (pass);
+      return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid PBKDF2 password"));
+    }
+  pass->hash = grub_strndup(hptr, ptr - hptr);
+  if (!pass->hash)
+    {
+      return grub_errno;
+    }
+
   pass->c = grub_strtoul (ptr, &ptr, 0);
   if (grub_errno)
     {
+      grub_free (pass->hash);
       grub_free (pass);
       return grub_errno;
     }
   if (*ptr != '.')
     {
+      grub_free (pass->hash);
       grub_free (pass);
       return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid PBKDF2 password"));
     }
@@ -119,6 +141,7 @@ grub_cmd_password (grub_command_t cmd __attribute__ ((unused)),
   ptr2 = grub_strchr (ptr, '.');
   if (!ptr2 || ((ptr2 - ptr) & 1) || grub_strlen (ptr2 + 1) & 1)
     {
+      grub_free (pass->hash);
       grub_free (pass);
       return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid PBKDF2 password"));
     }
@@ -157,6 +180,7 @@ grub_cmd_password (grub_command_t cmd __attribute__ ((unused)),
   ptro = pass->expected = grub_malloc (pass->buflen);
   if (!ptro)
     {
+      grub_free (pass->hash);
       grub_free (pass->salt);
       grub_free (pass);
       return grub_errno;
@@ -172,6 +196,7 @@ grub_cmd_password (grub_command_t cmd __attribute__ ((unused)),
       ptr++;
       if (hex1 < 0 || hex2 < 0)
 	{
+	  grub_free (pass->hash);
 	  grub_free (pass->expected);
 	  grub_free (pass->salt);
 	  grub_free (pass);

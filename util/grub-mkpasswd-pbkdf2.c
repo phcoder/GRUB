@@ -46,6 +46,7 @@ static struct argp_option options[] = {
   {"iteration-count",  'c', N_("NUM"), 0, N_("Number of PBKDF2 iterations"), 0},
   {"buflen",  'l', N_("NUM"), 0, N_("Length of generated hash"), 0},
   {"salt",  's', N_("NUM"), 0, N_("Length of salt"), 0},
+  {"hash",  'h', N_("HASH"), 0, N_("Hash to use"), 0},
   { 0, 0, 0, 0, 0, 0 }
 };
 
@@ -54,6 +55,7 @@ struct arguments
   unsigned int count;
   unsigned int buflen;
   unsigned int saltlen;
+  const char *hash;
 };
 
 static error_t
@@ -75,6 +77,9 @@ argp_parser (int key, char *arg, struct argp_state *state)
 
     case 's':
       arguments->saltlen = strtoul (arg, NULL, 0);
+      break;
+    case 'h':
+      arguments->hash = arg;
       break;
     default:
       return ARGP_ERR_UNKNOWN;
@@ -125,6 +130,7 @@ main (int argc, char *argv[])
   char pass2[GRUB_AUTH_MAX_PASSLEN];
 
   grub_util_host_init (&argc, &argv);
+  grub_gcry_init_all();
 
   /* Check for options.  */
   if (argp_parse (&argp, argc, argv, 0, 0, &arguments) != 0)
@@ -169,7 +175,15 @@ main (int argc, char *argv[])
       grub_util_error ("%s", _("couldn't retrieve random data for salt"));
     }
 
-  gcry_err = grub_crypto_pbkdf2 (GRUB_MD_SHA512,
+  const struct gcry_md_spec *md = arguments.hash ? grub_crypto_lookup_md_by_name(arguments.hash) : GRUB_MD_SHA512;
+  const char *hashname = arguments.hash ?: "sha512";
+
+  if (!md)
+    {
+      grub_util_error (_("couldn't find hash `%s'"), arguments.hash);
+    }
+
+  gcry_err = grub_crypto_pbkdf2 (md,
 				 (grub_uint8_t *) pass1, strlen (pass1),
 				 salt, arguments.saltlen,
 				 arguments.count, buf, arguments.buflen);
@@ -185,10 +199,12 @@ main (int argc, char *argv[])
     }
 
   result = xmalloc (sizeof ("grub.pbkdf2.sha512.XXXXXXXXXXXXXXXXXXX.S.S")
-		    + arguments.buflen * 2 + arguments.saltlen * 2);
+		    + strlen(hashname) + arguments.buflen * 2 + arguments.saltlen * 2);
   ptr = result;
-  memcpy (ptr, "grub.pbkdf2.sha512.", sizeof ("grub.pbkdf2.sha512.") - 1);
-  ptr += sizeof ("grub.pbkdf2.sha512.") - 1;
+  memcpy (ptr, "grub.pbkdf2.", sizeof ("grub.pbkdf2.") - 1);
+  ptr += sizeof ("grub.pbkdf2.") - 1;
+  ptr = grub_stpcpy(ptr, hashname);
+  *ptr++ = '.';
 
   grub_snprintf (ptr, sizeof ("XXXXXXXXXXXXXXXXXXX"), "%d", arguments.count);
   ptr += strlen (ptr);
