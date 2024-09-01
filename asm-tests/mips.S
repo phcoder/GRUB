@@ -7,5 +7,5 @@
 	ld $t2, 0($t1)
 
 a:
-	addiu $t1, $s0, (b - a)
+	addiu $t1, $s0, %lo(b - a)
 b:	nop

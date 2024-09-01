@@ -92,7 +92,7 @@ argcont:
 	beq $t1, $zero, argdone
 	 nop
 #define DO_PARSE(str, reg) \
-	addiu $t2, $s0, (str-base);\
+	addiu $t2, $s0, %lo(str-base);\
 	bal parsestr;\
 	 nop	    ;\
 	beq $v0, $zero, 1f;\
@@ -102,7 +102,7 @@ argcont:
 1:
 #define DO_CHECKT1(str, val)				 \
 	move $t6, $t1					;\
-	addiu $t7, $s0, (str - base);\
+	addiu $t7, $s0, %lo(str - base);\
 	bal do_check				       ;\
 	 li $t2, val
 
@@ -170,7 +170,7 @@ argdone:
 	 nop
 #define DO_CHECKA1(str, val)				 \
 	lw $t6, 0($a1)					;\
-	addiu $t7, $s0, (str - base);\
+	addiu $t7, $s0, %lo(str - base);\
 	bal do_check				       ;\
 	 li $t2, val
 	DO_CHECKA1 (machtype_yeeloong_str1, GRUB_ARCH_MACHINE_YEELOONG)
