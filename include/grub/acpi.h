@@ -81,8 +81,7 @@ struct grub_acpi_fadt
 
 #define GRUB_ACPI_MADT_SIGNATURE "APIC"
 
-/* Note: here GRUB_PACKED is not needed only because we only
-   have uint8_t here.  */
+/* Note: here GRUB_PACKED is not needed because we have grub_uint8_t only. */
 struct grub_acpi_madt_entry_header
 {
   grub_uint8_t type;
@@ -201,8 +200,9 @@ struct grub_acpi_genaddr {
 struct grub_acpi_spcr {
   struct grub_acpi_table_header hdr;
   grub_uint8_t intf_type;
-#define GRUB_ACPI_SPCR_INTF_TYPE_16550  0x00
-#define GRUB_ACPI_SPCR_INTF_TYPE_16550X 0x01
+#define GRUB_ACPI_SPCR_INTF_TYPE_16550      0x00
+#define GRUB_ACPI_SPCR_INTF_TYPE_16550_DBGP 0x01
+#define GRUB_ACPI_SPCR_INTF_TYPE_16550_DBG2 0x12
   grub_uint8_t reserved_0[3];
   struct grub_acpi_genaddr base_addr;
   grub_uint8_t interrupt_type;
