@@ -329,6 +329,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	  break;
 
 	case R_RISCV_RELAX:
+	case R_RISCV_ALIGN:
 	  break;
 	default:
 	  {

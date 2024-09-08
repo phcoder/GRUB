@@ -1477,6 +1477,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		     }
 		     break;
 		   case R_RISCV_RELAX:
+		   case R_RISCV_ALIGN:
 		     break;
 		   default:
 		     grub_util_error (_("relocation 0x%x is not implemented yet"),
@@ -1891,6 +1892,7 @@ translate_relocation_pe (struct translate_context *ctx,
 	  }
 	  break;
 	case R_RISCV_RELAX:
+	case R_RISCV_ALIGN:
 	  break;
 	default:
 	  grub_util_error (_("relocation 0x%x is not implemented yet"),
