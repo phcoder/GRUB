@@ -33,6 +33,7 @@ export PATH
 
 trim=0
 trim_head=664cbea8-132f-4770-8aa4-1696d59ac35c
+trim_tail=a3f2a1b5-74fb-4c76-959b-4cf5ef5578b3
 
 # Usage: usage
 # Print the usage.
@@ -303,6 +304,41 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
 	serial_port=efi0
 	;;
+     riscv64-efi)
+	qemu=qemu-system-riscv64
+	boot=hd
+	console=console
+	trim=1
+	pflash_code=${srcdir}/RISCV_VIRT_CODE.fd
+	pflash_vars=${srcdir}/RISCV_VIRT_VARS.fd
+	if [ -f "$pflash_code" ]; then
+	    qemuopts="-drive if=pflash,format=raw,unit=0,readonly=on,file=$pflash_code $qemuopts"
+	    if [ -f "$pflash_vars" ]; then
+		qemuopts="-drive if=pflash,format=raw,unit=1,snapshot=on,file=$pflash_vars $qemuopts"
+	    fi
+	elif [ -f /usr/share/qemu-efi-riscv64/RISCV_VIRT_CODE.fd ]; then
+	    pflash_code=/usr/share/qemu-efi-riscv64/RISCV_VIRT_CODE.fd
+	    pflash_vars=/usr/share/qemu-efi-riscv64/RISCV_VIRT_VARS.fd
+	    qemuopts="-drive if=pflash,format=raw,unit=0,readonly=on,file=$pflash_code $qemuopts"
+	    qemuopts="-drive if=pflash,format=raw,unit=1,snapshot=on,file=$pflash_vars $qemuopts"
+	elif [ -f /usr/share/edk2/riscv/RISCV_VIRT_CODE.fd ]; then
+	    # Fedora ships images that are under 32M and we need to fill them to 32M
+	    cp /usr/share/edk2/riscv/RISCV_VIRT_CODE.fd "$work_directory"
+	    cp /usr/share/edk2/riscv/RISCV_VIRT_VARS.fd "$work_directory"
+	    pflash_code="$work_directory"/RISCV_VIRT_CODE.fd
+	    pflash_vars="$work_directory"/RISCV_VIRT_VARS.fd
+	    truncate -s 32M $pflash_code
+	    truncate -s 32M $pflash_vars	    
+	    qemuopts="-drive if=pflash,format=raw,unit=0,readonly=on,file=$pflash_code $qemuopts"
+	    qemuopts="-drive if=pflash,format=raw,unit=1,snapshot=on,file=$pflash_vars $qemuopts"	    
+	else
+	    echo "Firmware not found, please install either the appropriate Debian/Fedora package or an appropriately named copy in the source directory." >&2
+	    exit 1
+	fi
+	qemuopts="-machine virt $qemuopts"
+	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
+	serial_port=efi0
+	;;
     loongarch64-efi)
 	qemu=qemu-system-loongarch64
 	boot=hd
@@ -498,6 +534,9 @@ source "\$prefix/testcase.cfg"
 # Stop serial output to suppress "ACPI shutdown failed" error.
 EOF
 # Attempt to switch to console on i386-ieee1275 causes "screen not found" message
+if [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = xriscv64-efi ]; then
+    echo "echo $trim_tail" >>${cfgfile}
+fi
 if [ x$console != x ] && [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" != xi386-ieee1275 ]; then
     echo "terminal_output $console" >>${cfgfile}
 fi
@@ -547,6 +586,8 @@ if [ x$boot = xhd ]; then
 	device="device virtio-blk-device,drive=hd0 -drive if=none,id=hd0,file="
     elif [ "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = loongarch64-efi ]; then
 	device="device virtio-blk-pci,drive=grubdisk -drive if=none,id=grubdisk,file="
+    elif [ "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = riscv64-efi ]; then
+	device="device virtio-blk-device,drive=hd0,bootindex=1 -drive if=none,id=hd0,file="
     elif [ "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = mips-arc ]; then
 	device="hdb "
     else
@@ -612,7 +653,7 @@ fi
 do_trim ()
 {
     if [ $trim = 1 ] || [ $trim = 2 ]; then
-	awk '{ if (have_head == 1) print $0; } /^'"$trim_head"'/ { have_head=1; }'
+	awk ' /^'"$trim_tail"'/ { have_head=0; } { if (have_head == 1) print $0; } /^'"$trim_head"'/ { have_head=1; }'
     else
 	cat
     fi
