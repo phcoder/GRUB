@@ -789,7 +789,10 @@ grub_ieee1275_ibm_cas (void)
 {
   int rc;
   grub_ieee1275_ihandle_t root;
-  grub_uint8_t ibm_arch_platform_support[8];
+  union {
+    grub_uint8_t u8[8];
+    grub_uint32_t u32[2];
+  } ibm_arch_platform_support;
   grub_ssize_t actual;
   grub_uint8_t xive_support = 0;
   grub_uint8_t mmu_support = 0;
@@ -807,23 +810,23 @@ grub_ieee1275_ibm_cas (void)
 
   grub_ieee1275_get_integer_property (grub_ieee1275_chosen,
                                       "ibm,arch-vec-5-platform-support",
-                                      (grub_uint32_t *) ibm_arch_platform_support,
+                                      ibm_arch_platform_support.u32,
                                       sizeof (ibm_arch_platform_support),
                                       &actual);
 
-  for (i = 0; i < prop_len; i++)
+  for (i = 0; i < prop_len; i += 2)
     {
-      switch (ibm_arch_platform_support[i])
+      switch (ibm_arch_platform_support.u8[i])
         {
           case XIVE_INDEX:
-            if (ibm_arch_platform_support[i + 1] & MAX_SUPPORTED)
+            if (ibm_arch_platform_support.u8[i + 1] & MAX_SUPPORTED)
               xive_support = XIVE_ENABLED;
             else
               xive_support = 0;
             break;
 
           case MMU_INDEX:
-            if (ibm_arch_platform_support[i + 1] & MAX_SUPPORTED)
+            if (ibm_arch_platform_support.u8[i + 1] & MAX_SUPPORTED)
               mmu_support = RADIX_ENABLED;
             else
               mmu_support = HASH_ENABLED;
@@ -831,7 +834,7 @@ grub_ieee1275_ibm_cas (void)
 
           case RADIX_GTSE_INDEX:
             if (mmu_support == RADIX_ENABLED)
-              radix_gtse_support = ibm_arch_platform_support[i + 1] & RADIX_GTSE_ENABLED;
+              radix_gtse_support = ibm_arch_platform_support.u8[i + 1] & RADIX_GTSE_ENABLED;
             else
               radix_gtse_support = 0;
             break;
@@ -840,8 +843,6 @@ grub_ieee1275_ibm_cas (void)
             /* Ignoring the other indexes of ibm,arch-vec-5-platform-support. */
             break;
         }
-      /* Skipping the property value. */
-      i++;
     }
 
   struct cas_vector vector =
