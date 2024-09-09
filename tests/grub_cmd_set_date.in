@@ -21,7 +21,7 @@ out=$(cat <<EOF | @builddir@/grub-shell
 insmod datehook
 date
 if [ \$YEAR = 2004 -a \$MONTH = 4 -a \$DAY = 4 -a \$HOUR = 20 -a \$MINUTE = 47 ]; then
-  hello
+  echo Back to 2004
   halt
 fi
 date 2004-04-04 20:47:00
@@ -29,7 +29,7 @@ reboot
 EOF
 )
 
-if [ "$(echo "$out" | tail -n 1)" != "Hello World" ]; then
+if [ "$(echo "$out" | tail -n 3|grep "Back to 2004")" != "Back to 2004" ]; then
   echo "Test failed: $out"
   exit 1
 fi
