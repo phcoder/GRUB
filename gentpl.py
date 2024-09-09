@@ -31,7 +31,7 @@ GRUB_PLATFORMS = [ "emu", "i386_pc", "i386_efi", "i386_qemu", "i386_coreboot",
                    "i386_xen", "x86_64_xen", "i386_xen_pvh",
                    "mips_loongson", "sparc64_ieee1275",
                    "powerpc_ieee1275", "mips_arc", "ia64_efi",
-                   "mips_qemu_mips", "arm_uboot", "arm_efi", "arm64_efi",
+                   "arm_uboot", "arm_efi", "arm64_efi",
                    "arm_coreboot", "loongarch64_efi", "riscv32_efi", "riscv64_efi" ]
 
 GROUPS = {}
@@ -42,7 +42,7 @@ GROUPS["common"]   = GRUB_PLATFORMS[:]
 GROUPS["i386"]        = [ "i386_pc", "i386_efi", "i386_qemu", "i386_coreboot", "i386_multiboot", "i386_ieee1275" ]
 GROUPS["x86_64"]      = [ "x86_64_efi" ]
 GROUPS["x86"]         = GROUPS["i386"] + GROUPS["x86_64"]
-GROUPS["mips"]        = [ "mips_loongson", "mips_qemu_mips", "mips_arc" ]
+GROUPS["mips"]        = [ "mips_loongson", "mips_arc" ]
 GROUPS["sparc64"]     = [ "sparc64_ieee1275" ]
 GROUPS["powerpc"]     = [ "powerpc_ieee1275" ]
 GROUPS["arm"]         = [ "arm_uboot", "arm_efi", "arm_coreboot" ]
@@ -63,7 +63,7 @@ GROUPS["coreboot"]  = [ "i386_coreboot", "arm_coreboot" ]
 GROUPS["noemu"]   = GRUB_PLATFORMS[:]; GROUPS["noemu"].remove("emu")
 
 # Groups based on hardware features
-GROUPS["cmos"] = GROUPS["x86"][:] + ["mips_loongson", "mips_qemu_mips",
+GROUPS["cmos"] = GROUPS["x86"][:] + ["mips_loongson",
                                      "sparc64_ieee1275", "powerpc_ieee1275"]
 GROUPS["cmos"].remove("i386_efi"); GROUPS["cmos"].remove("x86_64_efi");
 GROUPS["pci"]      = GROUPS["x86"] + ["mips_loongson"]
@@ -75,7 +75,7 @@ GROUPS["videomodules"]   = GRUB_PLATFORMS[:];
 for i in GROUPS["videoinkernel"]: GROUPS["videomodules"].remove(i)
 
 # Similar for terminfo
-GROUPS["terminfoinkernel"] = [ "emu", "mips_loongson", "mips_arc", "mips_qemu_mips", "i386_xen_pvh" ] + GROUPS["xen"] + GROUPS["ieee1275"] + GROUPS["uboot"];
+GROUPS["terminfoinkernel"] = [ "emu", "mips_loongson", "mips_arc", "i386_xen_pvh" ] + GROUPS["xen"] + GROUPS["ieee1275"] + GROUPS["uboot"];
 GROUPS["terminfomodule"]   = GRUB_PLATFORMS[:];
 for i in GROUPS["terminfoinkernel"]: GROUPS["terminfomodule"].remove(i)
 

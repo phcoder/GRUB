@@ -33,7 +33,7 @@
 #include <grub/machine/int.h>
 #endif
 
-#if defined (GRUB_MACHINE_COREBOOT) || defined (GRUB_MACHINE_QEMU) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS) || defined (GRUB_MACHINE_MULTIBOOT)
+#if defined (GRUB_MACHINE_COREBOOT) || defined (GRUB_MACHINE_QEMU) || defined (GRUB_MACHINE_MULTIBOOT)
 #include <grub/machine/console.h>
 #endif
 

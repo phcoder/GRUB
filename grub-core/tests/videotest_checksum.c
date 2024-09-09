@@ -50,7 +50,7 @@ videotest_checksum (void)
   for (i = 0; i < ARRAY_SIZE (grub_test_video_modes); i++)
     {
       grub_err_t err;
-#if defined (GRUB_MACHINE_MIPS_QEMU_MIPS) || defined (GRUB_MACHINE_IEEE1275)
+#if defined (GRUB_MACHINE_IEEE1275)
       if (grub_test_video_modes[i].width > 1024)
 	continue;
 #endif

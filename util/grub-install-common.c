@@ -915,8 +915,6 @@ static struct
     [GRUB_INSTALL_PLATFORM_X86_64_XEN] =       { "x86_64",      "xen"       },
     [GRUB_INSTALL_PLATFORM_I386_XEN_PVH] =     { "i386",        "xen_pvh"   },
     [GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON] =  { "mipsel",      "loongson"  },
-    [GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS] = { "mipsel",      "qemu_mips" },
-    [GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS] =   { "mips",        "qemu_mips" },
     [GRUB_INSTALL_PLATFORM_MIPSEL_ARC] =       { "mipsel",      "arc"       },
     [GRUB_INSTALL_PLATFORM_MIPS_ARC] =         { "mips",        "arc"       },
     [GRUB_INSTALL_PLATFORM_SPARC64_IEEE1275] = { "sparc64",     "ieee1275"  },

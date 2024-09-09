@@ -966,14 +966,11 @@ main (int argc, char *argv[])
   make_image_fwdisk (GRUB_INSTALL_PLATFORM_MIPSEL_ARC, "mipsel-arc", "arc.exe");
 
   grub_install_push_module ("pata");
-  make_image (GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS, "mipsel-qemu_mips-elf", "roms/mipsel-qemu_mips.elf");
 
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "mipsel-loongson-elf", "loongson.elf");
 
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "mipsel-yeeloong-flash", "mipsel-yeeloong.bin");
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "mipsel-fuloong2f-flash", "mipsel-fuloong2f.bin");
-
-  make_image (GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS, "mips-qemu_mips-elf", "roms/mips-qemu_mips.elf");
 
   grub_install_push_module ("at_keyboard");
 
@@ -994,11 +991,9 @@ main (int argc, char *argv[])
 	const char *from, *to;
       } roms[] =
 	  {
-	    {GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS, "roms/mipsel-qemu_mips.elf", "mipsel-qemu_mips.elf"},
 	    {GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "loongson.elf", "mipsel-loongson.elf"},
 	    {GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "roms/mipsel-yeeloong.bin", "mipsel-yeeloong.bin"},
 	    {GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "roms/mipsel-fulong.bin", "mipsel-fulong.bin"},
-	    {GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS, "roms/mips-qemu_mips.elf", "mips-qemu_mips.elf"},
 	    {GRUB_INSTALL_PLATFORM_I386_QEMU, "roms/qemu.img", "qemu.img"},
 	    {GRUB_INSTALL_PLATFORM_I386_COREBOOT, "roms/coreboot.elf", "coreboot.elf"},
 	  };

@@ -35,8 +35,6 @@ static const char *modnames_def[] = {
   /* FIXME: autogenerate this.  */
 #if defined (__i386__) || defined (__x86_64__) || defined (GRUB_MACHINE_MIPS_LOONGSON)
   "pata", "ahci", "usbms", "ohci", "uhci", "ehci"
-#elif defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
-  "pata"
 #else
 #error "Fill this"
 #endif

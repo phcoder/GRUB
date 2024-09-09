@@ -127,7 +127,7 @@ gfxterm_menu (void)
       {
 	grub_uint64_t start;
 
-#if defined (GRUB_MACHINE_MIPS_QEMU_MIPS) || defined (GRUB_MACHINE_IEEE1275)
+#if defined (GRUB_MACHINE_IEEE1275)
 	if (grub_test_video_modes[i].width > 1024)
 	  continue;
 	if (grub_strcmp (tests[j].name, "gfxmenu") == 0

@@ -97,7 +97,7 @@ grub_keyboard_controller_write (grub_uint8_t c)
   grub_outb (c, KEYBOARD_REG_DATA);
 }
 
-#if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_QEMU) || defined (GRUB_MACHINE_COREBOOT) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
+#if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_QEMU) || defined (GRUB_MACHINE_COREBOOT)
 #define USE_SCANCODE_SET 1
 #else
 #define USE_SCANCODE_SET 0
@@ -267,7 +267,7 @@ grub_keyboard_controller_init (void)
       keyboard_controller_wait_until_ready ();
       grub_inb (KEYBOARD_REG_DATA);
     }
-#if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
+#if defined (GRUB_MACHINE_MIPS_LOONGSON)
   grub_keyboard_controller_orig = 0;
   grub_keyboard_orig_set = 2;
 #elif defined (GRUB_MACHINE_QEMU) || defined (GRUB_MACHINE_COREBOOT)

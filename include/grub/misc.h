@@ -451,8 +451,7 @@ grub_abs (int x)
 }
 
 /* Reboot the machine.  */
-#if defined (GRUB_MACHINE_EMU) || defined (GRUB_MACHINE_QEMU_MIPS) || \
-    defined (GRUB_MACHINE_EFI)
+#if defined (GRUB_MACHINE_EMU) || defined (GRUB_MACHINE_EFI)
 void EXPORT_FUNC(grub_reboot) (void) __attribute__ ((noreturn));
 #else
 void grub_reboot (void) __attribute__ ((noreturn));

@@ -57,12 +57,6 @@ cont:
 	/* Save our base.  */
 	move $s0, $ra
 
-#ifdef GRUB_MACHINE_MIPS_QEMU_MIPS
-	lui $t1, %hi(grub_arch_busclock)
-	addiu $t1, %lo(grub_arch_busclock)
-	sw $s4, 8($t1)
-#endif
-
 #ifdef GRUB_MACHINE_MIPS_LOONGSON
 	lui $t1, %hi(grub_arch_busclock)
 	addiu $t1, %lo(grub_arch_busclock)

@@ -79,7 +79,7 @@ struct grub_module_info64
 #endif
 
 #if defined (GRUB_MACHINE_PCBIOS) || defined (GRUB_MACHINE_COREBOOT) \
-  || defined (GRUB_MACHINE_MULTIBOOT) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS) \
+  || defined (GRUB_MACHINE_MULTIBOOT) \
   || defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_ARC) \
   || (defined (__sparc__) && defined (GRUB_MACHINE_IEEE1275)) \
   || defined (GRUB_MACHINE_UBOOT) || defined (GRUB_MACHINE_XEN) \

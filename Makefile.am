@@ -403,17 +403,6 @@ if COND_mips_loongson
 BOOTCHECKS = bootcheck-linux-loongson
 endif
 
-if COND_mipsel
-if COND_mips_qemu_mips
-BOOTCHECKS = bootcheck-linux-mipsel
-endif
-endif
-if COND_mipseb
-if COND_mips_qemu_mips
-BOOTCHECKS = bootcheck-linux-mips
-endif
-endif
-
 if COND_powerpc_ieee1275
 BOOTCHECKS = bootcheck-linux-ppc
 endif

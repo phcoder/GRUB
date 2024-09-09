@@ -26,8 +26,8 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
     # FIXME: qemu gets bonito DMA wrong
     mipsel-loongson)
 	exit 77;;
-    # PLATFORM: no USB on ARC and qemu-mips platforms
-    mips*-arc | mips*-qemu_mips)
+    # PLATFORM: no USB on ARC platform
+    mips*-arc)
 	exit 77;;
     # FIXME: No native drivers are available for those
     powerpc-ieee1275 | sparc64-ieee1275 | arm*-efi | loongarch64-efi)

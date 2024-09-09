@@ -24,7 +24,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
     *-emu)
 	exit 77;;
     # PLATFORM: Flash targets
-    i386-qemu | i386-coreboot | mips-qemu_mips | mipsel-qemu_mips)
+    i386-qemu | i386-coreboot)
 	exit 77;;
     # FIXME: currently grub-shell uses only -kernel for loongson
     mipsel-loongson)

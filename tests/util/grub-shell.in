@@ -112,12 +112,6 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	halt_cmd=reboot
 	;;
 
-    mips-qemu_mips)
-	boot=mips_qemu
-	qemu=qemu-system-mips
-	qemuopts="-M mips $qemuopts"
-	console=vga_text
-	;;
     mips-arc)
 	boot=cd
 	qemu=qemu-system-mips64
@@ -134,12 +128,6 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	console=console
 	halt_cmd=reboot
 	trim=1
-	;;
-    mipsel-qemu_mips)
-	boot=mipsel_qemu
-	qemu=qemu-system-mipsel
-	qemuopts="-M mips $qemuopts"
-	console=vga_text
 	;;
     mipsel-loongson)
 	boot=mipsel_fulong2e
@@ -623,18 +611,8 @@ if [ x$boot = xqemu ]; then
     device="cdrom "
 fi
 
-if [ x$boot = xmipsel_qemu ]; then
-    bootdev="-kernel ${rom_directory}/mipsel-qemu_mips.elf"
-    device="cdrom "
-fi
-
 if [ x$boot = xmipsel_fulong2e ]; then
     bootdev="-kernel ${rom_directory}/mipsel-loongson.elf -append machtype=lemote-fuloong-2e"
-    device="cdrom "
-fi
-
-if [ x$boot = xmips_qemu ]; then
-    bootdev="-kernel ${rom_directory}/mips-qemu_mips.elf"
     device="cdrom "
 fi
 

@@ -22,12 +22,8 @@
 #include <grub/disk.h>
 #include <grub/dl.h>
 #include <grub/mm.h>
-#ifndef GRUB_MACHINE_MIPS_QEMU_MIPS
 #include <grub/pci.h>
 #include <grub/cs5536.h>
-#else
-#define GRUB_MACHINE_PCI_IO_BASE  0xb4000000
-#endif
 #include <grub/time.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
@@ -113,13 +109,8 @@ grub_pata_wait (void)
   grub_millisleep (50);
 }
 
-#ifdef GRUB_MACHINE_MIPS_QEMU_MIPS
-#define grub_ata_to_cpu16(x) ((grub_uint16_t) (x))
-#define grub_cpu_to_ata16(x) ((grub_uint16_t) (x))
-#else
 #define grub_ata_to_cpu16 grub_le_to_cpu16
 #define grub_cpu_to_ata16 grub_cpu_to_le16
-#endif
 
 static void
 grub_pata_pio_read (struct grub_pata_device *dev, char *buf, grub_size_t size)
@@ -343,7 +334,6 @@ grub_pata_device_initialize (int port, int device, int addr)
   return 0;
 }
 
-#ifndef GRUB_MACHINE_MIPS_QEMU_MIPS
 static int
 grub_pata_pciinit (grub_pci_device_t dev,
 		   grub_pci_id_t pciid,
@@ -462,19 +452,6 @@ grub_pata_initialize (void)
   grub_pci_iterate (grub_pata_pciinit, NULL);
   return 0;
 }
-#else
-static grub_err_t
-grub_pata_initialize (void)
-{
-  int i;
-  for (i = 0; i < 2; i++)
-    {
-      grub_pata_device_initialize (i, 0, grub_pata_ioaddress[i]);
-      grub_pata_device_initialize (i, 1, grub_pata_ioaddress[i]);
-    }
-  return 0;
-}
-#endif
 
 static grub_err_t
 grub_pata_open (int id, int devnum, struct grub_ata *ata)

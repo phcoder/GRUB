@@ -2476,7 +2476,6 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
       if (image_target->id == IMAGE_YEELOONG_FLASH
 	  || image_target->id == IMAGE_FULOONG2F_FLASH
 	  || image_target->id == IMAGE_LOONGSON_ELF
-	  || image_target->id == IMAGE_QEMU_MIPS_FLASH
 	  || image_target->id == IMAGE_MIPS_ARC)
 	{
 	  layout->kernel_size = bss_start;

@@ -462,78 +462,6 @@ static const struct grub_install_image_target_desc image_targets[] =
       .default_compression = GRUB_COMPRESSION_NONE
     },
     {
-      .dirname = "mipsel-qemu_mips",
-      .names = { "mipsel-qemu_mips-elf", NULL },
-      .voidp_sizeof = 4,
-      .bigendian = 0,
-      .id = IMAGE_LOONGSON_ELF,
-      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
-      .total_module_size = GRUB_KERNEL_MIPS_QEMU_MIPS_TOTAL_MODULE_SIZE,
-      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
-      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
-      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
-      .section_align = 1,
-      .vaddr_offset = 0,
-      .link_addr = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ADDR,
-      .elf_target = EM_MIPS,
-      .link_align = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ALIGN,
-      .default_compression = GRUB_COMPRESSION_NONE
-    },
-    {
-      .dirname = "mips-qemu_mips",
-      .names = { "mips-qemu_mips-flash", NULL },
-      .voidp_sizeof = 4,
-      .bigendian = 1,
-      .id = IMAGE_QEMU_MIPS_FLASH,
-      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
-      .total_module_size = GRUB_KERNEL_MIPS_QEMU_MIPS_TOTAL_MODULE_SIZE,
-      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
-      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
-      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
-      .section_align = 1,
-      .vaddr_offset = 0,
-      .link_addr = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ADDR,
-      .elf_target = EM_MIPS,
-      .link_align = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ALIGN,
-      .default_compression = GRUB_COMPRESSION_NONE
-    },
-    {
-      .dirname = "mipsel-qemu_mips",
-      .names = { "mipsel-qemu_mips-flash", NULL },
-      .voidp_sizeof = 4,
-      .bigendian = 0,
-      .id = IMAGE_QEMU_MIPS_FLASH,
-      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
-      .total_module_size = GRUB_KERNEL_MIPS_QEMU_MIPS_TOTAL_MODULE_SIZE,
-      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
-      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
-      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
-      .section_align = 1,
-      .vaddr_offset = 0,
-      .link_addr = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ADDR,
-      .elf_target = EM_MIPS,
-      .link_align = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ALIGN,
-      .default_compression = GRUB_COMPRESSION_NONE
-    },
-    {
-      .dirname = "mips-qemu_mips",
-      .names = { "mips-qemu_mips-elf", NULL },
-      .voidp_sizeof = 4,
-      .bigendian = 1,
-      .id = IMAGE_LOONGSON_ELF,
-      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
-      .total_module_size = GRUB_KERNEL_MIPS_QEMU_MIPS_TOTAL_MODULE_SIZE,
-      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
-      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
-      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
-      .section_align = 1,
-      .vaddr_offset = 0,
-      .link_addr = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ADDR,
-      .elf_target = EM_MIPS,
-      .link_align = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ALIGN,
-      .default_compression = GRUB_COMPRESSION_NONE
-    },
-    {
       .dirname = "arm-uboot",
       .names = { "arm-uboot", NULL },
       .voidp_sizeof = 4,
@@ -1241,7 +1169,6 @@ grub_install_generate_image (const char *dir, const char *prefix,
     case IMAGE_FULOONG2F_FLASH:
     case IMAGE_EFI:
     case IMAGE_MIPS_ARC:
-    case IMAGE_QEMU_MIPS_FLASH:
     case IMAGE_XEN:
     case IMAGE_XEN_PVH:
       break;
@@ -1672,28 +1599,6 @@ grub_install_generate_image (const char *dir, const char *prefix,
       core_size = rom_size;
       free (boot_img);
       free (boot_path);
-    }
-    break;
-    case IMAGE_QEMU_MIPS_FLASH:
-    {
-      char *rom_img;
-      size_t rom_size;
-
-      if (core_size > 512 * 1024)
-	grub_util_error ("%s", _("firmware image is too big"));
-      rom_size = 512 * 1024;
-
-      rom_img = xmalloc (rom_size);
-      memset (rom_img, 0, rom_size);
-
-      memcpy (rom_img, core_img, core_size);
-
-      memset (rom_img + core_size, 0,
-	      rom_size - core_size);
-
-      free (core_img);
-      core_img = rom_img;
-      core_size = rom_size;
     }
     break;
 

@@ -983,7 +983,7 @@ GRUB_PLATFORMS = [ "emu", "i386_pc", "i386_efi", "i386_qemu", "i386_coreboot",
                    "i386_multiboot", "i386_ieee1275", "x86_64_efi",
                    "mips_loongson", "sparc64_ieee1275",
                    "powerpc_ieee1275", "mips_arc", "ia64_efi",
-                   "mips_qemu_mips", "s390_mainframe" ]
+                   "s390_mainframe" ]
 @end example
 
 You may also want already to add new platform to one or several of available
@@ -1295,7 +1295,7 @@ in OpenFirmware.
 
 On sparc64-ieee1275 stack is 256KiB and heap is 2MiB.
 
-On mips(el)-qemu_mips and mipsel-loongson stack is 2MiB (everything below
+On mipsel-loongson stack is 2MiB (everything below
 GRUB image) and everything above GRUB image (from 2MiB + kernel size)
 until 256MiB is part of heap.
 
@@ -1322,7 +1322,6 @@ In short:
 @item powerpc-ieee1275        @tab ?       @tab available memory - 128MiB
 @item sparc64-ieee1275        @tab 256KiB  @tab 2 MiB
 @item arm-uboot               @tab 256KiB  @tab 2 MiB
-@item mips(el)-qemu_mips      @tab 2MiB    @tab 253 MiB
 @item mipsel-loongson         @tab 2MiB    @tab 253 MiB
 @item mips-arc                @tab 2MiB    @tab 125 MiB
 @item mipsel-arc              @tab 2MiB    @tab 248 MiB

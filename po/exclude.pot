@@ -945,30 +945,6 @@ msgstr ""
 msgid "mipsel-arc"
 msgstr ""
 
-#: util/grub-mkimage.c:421 util/grub-mkimage.c:457
-msgid "mipsel-qemu_mips"
-msgstr ""
-
-#: util/grub-mkimage.c:422
-msgid "mipsel-qemu_mips-elf"
-msgstr ""
-
-#: util/grub-mkimage.c:439 util/grub-mkimage.c:475
-msgid "mips-qemu_mips"
-msgstr ""
-
-#: util/grub-mkimage.c:440
-msgid "mips-qemu_mips-flash"
-msgstr ""
-
-#: util/grub-mkimage.c:458
-msgid "mipsel-qemu_mips-flash"
-msgstr ""
-
-#: util/grub-mkimage.c:476
-msgid "mips-qemu_mips-elf"
-msgstr ""
-
 
 #: grub-core/commands/terminal.c:85 grub-core/commands/terminal.c:145
 msgid "--append"
@@ -5565,10 +5541,6 @@ msgstr ""
 msgid "arc.exe"
 msgstr ""
 
-#: util/grub-mkrescue.c:771 util/grub-mkrescue.c:799
-msgid "roms/mipsel-qemu_mips.elf"
-msgstr ""
-
 #: util/grub-mkrescue.c:773 util/grub-mkrescue.c:800
 msgid "loongson.elf"
 msgstr ""
@@ -5581,20 +5553,12 @@ msgstr ""
 msgid "mipsel-fuloong2f.bin"
 msgstr ""
 
-#: util/grub-mkrescue.c:778 util/grub-mkrescue.c:803
-msgid "roms/mips-qemu_mips.elf"
-msgstr ""
-
 #: util/grub-mkrescue.c:782 util/grub-mkrescue.c:804
 msgid "roms/qemu.img"
 msgstr ""
 
 #: util/grub-mkrescue.c:786 util/grub-mkrescue.c:805
 msgid "roms/coreboot.elf"
-msgstr ""
-
-#: util/grub-mkrescue.c:799
-msgid "mipsel-qemu_mips.elf"
 msgstr ""
 
 #: util/grub-mkrescue.c:800
@@ -5611,10 +5575,6 @@ msgstr ""
 
 #: util/grub-mkrescue.c:802
 msgid "mipsel-fulong.bin"
-msgstr ""
-
-#: util/grub-mkrescue.c:803
-msgid "mips-qemu_mips.elf"
 msgstr ""
 
 #: util/grub-mkrescue.c:804
@@ -6516,10 +6476,6 @@ msgstr ""
 
 #: util/grub-install-common.c:653
 msgid "loongson"
-msgstr ""
-
-#: util/grub-install-common.c:654 util/grub-install-common.c:655
-msgid "qemu_mips"
 msgstr ""
 
 #: util/grub-install-common.c:655 util/grub-install-common.c:657

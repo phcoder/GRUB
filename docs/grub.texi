@@ -2542,7 +2542,7 @@ The following properties are supported by all components:
 @chapter Booting GRUB from the network
 
 The following instructions don't work for *-emu, i386-qemu, i386-coreboot,
-i386-multiboot, mips_loongson, mips-arc and mips_qemu_mips
+i386-multiboot, mips_loongson and mips-arc
 
 To generate a netbootable directory, run:
 
@@ -2939,13 +2939,13 @@ Lightly limited platforms:
 @item All EFI platforms: limited by contiguous RAM size and possibly firmware bugs
 @item Coreboot and multiboot. kernel.img (.text + .data + .bss) is limited by 392704 bytes.
       module size is limited by the size of contiguous chunk at 1M address.
-@item mipsel-loongson (ELF), mips(el)-qemu_mips (ELF): if uncompressed:
+@item mipsel-loongson (ELF): if uncompressed:
                 kernel.img (.text + .data) + modules is limited by the space from 80200000 forward
                 if compressed:
                 kernel.img (.text + .data, uncompressed) + modules (uncompressed)
                 + (modules + kernel.img (.text + .data)) (compressed)
                 + decompressor is limited by the space from 80200000 forward
-@item mipsel-loongson (Flash), mips(el)-qemu_mips (Flash): kernel.img (.text + .data) + modules is limited by the space from 80200000 forward
+@item mipsel-loongson (Flash): kernel.img (.text + .data) + modules is limited by the space from 80200000 forward
                                core.img (final) is limited by flash size (512K on yeeloong and fulooong)
 @item mips-arc: if uncompressed:
                 kernel.img (.text + .data) is limited by the space from 8bd00000 forward
@@ -6717,8 +6717,7 @@ On other platforms it's just an educated guess.
 Note that hint failure results in just reduced performance, not a failure
 
 BadRAM is the ability to mark some of the RAM as ``bad''. Note: due to protocol
-limitations mips-loongson (with Linux protocol)
-and mips-qemu_mips can use only memory up to first hole.
+limitations mips-loongson (with Linux protocol)  can use only memory up to first hole.
 
 Bootlocation is ability of GRUB to automatically detect where it boots from.
 ``disk'' means the detection is limited to detecting the disk with partition
@@ -6849,7 +6848,7 @@ Advanced operations for power users:
 
 Miscellaneous:
 @itemize
-@item cmos (x86-*, ieee1275, mips-qemu_mips, mips-loongson): cmostest
+@item cmos (x86-*, ieee1275, mips-loongson): cmostest
     (used on some laptops to check for special power-on key), cmosclean
 @item i386-pc: play
 @end itemize
