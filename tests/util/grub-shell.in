@@ -295,7 +295,11 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	else
 	    pflash=/usr/share/AAVMF/AAVMF32.fd
 	    pflash_code=/usr/share/AAVMF/AAVMF32_CODE.fd
-	    pflash_vars=/usr/share/AAVMF/AAVMF32_VARS.fd
+	    if [ -f /usr/share/AAVMF/AAVMF32_VARS.fd ]; then
+		pflash_vars=/usr/share/AAVMF/AAVMF32_VARS.fd
+	    else
+		pflash_vars=/usr/share/AAVMF/AAVMF_VARS.fd
+	    fi
 	    if [ -f "$pflash" ]; then
 		qemuopts="-drive if=pflash,format=raw,unit=0,snapshot=on,file=$pflash $qemuopts"
 	    elif [ -f "$pflash_code" ]; then
@@ -540,7 +544,7 @@ source "\$prefix/testcase.cfg"
 # Stop serial output to suppress "ACPI shutdown failed" error.
 EOF
 # Attempt to switch to console on i386-ieee1275 causes "screen not found" message
-if [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = xriscv64-efi ]; then
+if [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = xriscv64-efi ] || [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" = xarm-efi ]; then
     echo "echo $trim_tail" >>${cfgfile}
 fi
 if [ x$console != x ] && [ x"${grub_modinfo_target_cpu}-${grub_modinfo_platform}" != xi386-ieee1275 ]; then
