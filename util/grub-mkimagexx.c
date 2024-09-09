@@ -62,6 +62,8 @@
 #endif
 #endif
 
+#define grub_host_to_targetXX SUFFIX(grub_host_to_target)
+
 /* These structures are defined according to the CHRP binding to IEEE1275,
    "Client Program Format" section.  */
 
@@ -279,9 +281,9 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
   phdr->p_offset = grub_host_to_target32 (header_size);
   phdr->p_flags = grub_host_to_target32 (PF_R | PF_W | PF_X);
 
-  ehdr->e_entry = grub_host_to_target32 (target_addr);
-  phdr->p_vaddr = grub_host_to_target32 (target_addr);
-  phdr->p_paddr = grub_host_to_target32 (target_addr);
+  ehdr->e_entry = grub_host_to_targetXX (target_addr);
+  phdr->p_vaddr = grub_host_to_targetXX (target_addr);
+  phdr->p_paddr = grub_host_to_targetXX (target_addr);
   phdr->p_align = grub_host_to_target32 (layout->align > image_target->link_align ?
 					 layout->align : image_target->link_align);
   if (image_target->id == IMAGE_LOONGSON_ELF)
@@ -327,8 +329,8 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
 	target_addr_mods = ALIGN_UP (target_addr + layout->kernel_size + layout->bss_size
 				     + image_target->mod_gap,
 				     image_target->mod_align);
-      phdr->p_vaddr = grub_host_to_target_addr (target_addr_mods);
-      phdr->p_paddr = grub_host_to_target_addr (target_addr_mods);
+      phdr->p_vaddr = grub_host_to_targetXX (target_addr_mods);
+      phdr->p_paddr = grub_host_to_targetXX (target_addr_mods);
       phdr->p_align = grub_host_to_target32 (image_target->link_align);
     }
 
@@ -494,8 +496,8 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
 
     shdr->sh_name = grub_host_to_target32 (0);
     shdr->sh_type = grub_host_to_target32 (SHT_STRTAB);
-    shdr->sh_addr = grub_host_to_target_addr (0);
-    shdr->sh_offset = grub_host_to_target_addr (str_start - elf_img);
+    shdr->sh_addr = grub_host_to_targetXX (0);
+    shdr->sh_offset = grub_host_to_targetXX (str_start - elf_img);
     shdr->sh_size = grub_host_to_target32 (string_size);
     shdr->sh_link = grub_host_to_target32 (0);
     shdr->sh_info = grub_host_to_target32 (0);
@@ -508,8 +510,8 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
     shdr->sh_name = grub_host_to_target32 (ptr - str_start);
     ptr += sizeof (".text");
     shdr->sh_type = grub_host_to_target32 (SHT_PROGBITS);
-    shdr->sh_addr = grub_host_to_target_addr (target_addr);
-    shdr->sh_offset = grub_host_to_target_addr (header_size);
+    shdr->sh_addr = grub_host_to_targetXX (target_addr);
+    shdr->sh_offset = grub_host_to_targetXX (header_size);
     shdr->sh_size = grub_host_to_target32 (layout->kernel_size);
     shdr->sh_link = grub_host_to_target32 (0);
     shdr->sh_info = grub_host_to_target32 (0);
@@ -521,8 +523,8 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
     shdr->sh_name = grub_host_to_target32 (ptr - str_start);
     ptr += sizeof ("mods");
     shdr->sh_type = grub_host_to_target32 (SHT_PROGBITS);
-    shdr->sh_addr = grub_host_to_target_addr (target_addr + layout->kernel_size);
-    shdr->sh_offset = grub_host_to_target_addr (header_size + layout->kernel_size);
+    shdr->sh_addr = grub_host_to_targetXX (target_addr + layout->kernel_size);
+    shdr->sh_offset = grub_host_to_targetXX (header_size + layout->kernel_size);
     shdr->sh_size = grub_host_to_target32 (*core_size - layout->kernel_size);
     shdr->sh_link = grub_host_to_target32 (0);
     shdr->sh_info = grub_host_to_target32 (0);
@@ -536,8 +538,8 @@ SUFFIX (grub_mkimage_generate_elf) (const struct grub_install_image_target_desc 
 	shdr->sh_name = grub_host_to_target32 (ptr - str_start);
 	ptr += sizeof (".xen");
 	shdr->sh_type = grub_host_to_target32 (SHT_PROGBITS);
-	shdr->sh_addr = grub_host_to_target_addr (target_addr + layout->kernel_size);
-	shdr->sh_offset = grub_host_to_target_addr (program_size + header_size);
+	shdr->sh_addr = grub_host_to_targetXX (target_addr + layout->kernel_size);
+	shdr->sh_offset = grub_host_to_targetXX (program_size + header_size);
 	if (image_target->id == IMAGE_XEN)
 	  shdr->sh_size = grub_host_to_target32 (XEN_NOTE_SIZE);
 	else
@@ -2261,7 +2263,7 @@ SUFFIX (put_section) (Elf_Shdr *s, int i,
 		      struct section_metadata *smd,
 		      const struct grub_install_image_target_desc *image_target)
 {
-	Elf_Word align = grub_host_to_target_addr (s->sh_addralign);
+	Elf_Word align = grub_host_to_targetXX (s->sh_addralign);
 	const char *name = smd->strtab + grub_host_to_target32 (s->sh_name);
 
 	if (align)
@@ -2273,10 +2275,10 @@ SUFFIX (put_section) (Elf_Shdr *s, int i,
 			GRUB_HOST_PRIxLONG_LONG,
 			name, (unsigned long long) current_address);
 	if (!is_relocatable (image_target))
-	  current_address = grub_host_to_target_addr (s->sh_addr)
+	  current_address = grub_host_to_targetXX (s->sh_addr)
 			    - image_target->link_addr;
 	smd->addrs[i] = current_address;
-	current_address += grub_host_to_target_addr (s->sh_size);
+	current_address += grub_host_to_targetXX (s->sh_size);
 	return current_address;
 }
 
@@ -2316,13 +2318,13 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
 	layout->kernel_size = SUFFIX (put_section) (s, i, layout->kernel_size,
 						smd, image_target);
 	if (!is_relocatable (image_target) &&
-	    grub_host_to_target_addr (s->sh_addr) != image_target->link_addr)
+	    grub_host_to_targetXX (s->sh_addr) != image_target->link_addr)
 	  {
 	    char *msg
 	      = grub_xasprintf (_("`%s' is miscompiled: its start address is 0x%llx"
 				  " instead of 0x%llx: ld.gold bug?"),
 				kernel_path,
-				(unsigned long long) grub_host_to_target_addr (s->sh_addr),
+				(unsigned long long) grub_host_to_targetXX (s->sh_addr),
 				(unsigned long long) image_target->link_addr);
 	    grub_util_error ("%s", msg);
 	  }
@@ -2423,7 +2425,7 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
   /* Relocate sections then symbols in the virtual address space.  */
   s = (Elf_Shdr *) ((char *) smd.sections
 		      + grub_host_to_target16 (e->e_shstrndx) * smd.section_entsize);
-  smd.strtab = (char *) e + grub_host_to_target_addr (s->sh_offset);
+  smd.strtab = (char *) e + grub_host_to_targetXX (s->sh_offset);
 
   smd.addrs = xcalloc (smd.num_sections, sizeof (*smd.addrs));
   smd.vaddrs = xcalloc (smd.num_sections, sizeof (*smd.vaddrs));
@@ -2441,7 +2443,7 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 	   i++, s = (Elf_Shdr *) ((char *) s + smd.section_entsize))
 	if (grub_target_to_host32 (s->sh_type) == SHT_NOBITS)
 	  {
-	    Elf_Word sec_align = grub_host_to_target_addr (s->sh_addralign);
+	    Elf_Word sec_align = grub_host_to_targetXX (s->sh_addralign);
 	    const char *name = smd.strtab + grub_host_to_target32 (s->sh_name);
 
 	    if (sec_align)
@@ -2454,7 +2456,7 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 			    GRUB_HOST_PRIxLONG_LONG,
 			    name, (unsigned long long) current_address);
 	    if (!is_relocatable (image_target))
-	      current_address = grub_host_to_target_addr (s->sh_addr)
+	      current_address = grub_host_to_targetXX (s->sh_addr)
 		- image_target->link_addr;
 
 	    if (is_first)
@@ -2465,7 +2467,7 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 
 	    smd.vaddrs[i] = current_address
 	      + image_target->vaddr_offset;
-	    current_address += grub_host_to_target_addr (s->sh_size);
+	    current_address += grub_host_to_targetXX (s->sh_size);
 	  }
       current_address = ALIGN_UP (current_address + image_target->vaddr_offset,
 				  image_target->section_align)
@@ -2584,11 +2586,11 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
       {
 	if (grub_target_to_host32 (s->sh_type) == SHT_NOBITS)
 	  memset (out_img + smd.addrs[i], 0,
-		  grub_host_to_target_addr (s->sh_size));
+		  grub_host_to_targetXX (s->sh_size));
 	else
 	  memcpy (out_img + smd.addrs[i],
-		  kernel_img + grub_host_to_target_addr (s->sh_offset),
-		  grub_host_to_target_addr (s->sh_size));
+		  kernel_img + grub_host_to_targetXX (s->sh_offset),
+		  grub_host_to_targetXX (s->sh_size));
       }
   free (kernel_img);
 
