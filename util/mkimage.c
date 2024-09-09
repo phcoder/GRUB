@@ -1820,10 +1820,11 @@ grub_install_generate_image (const char *dir, const char *prefix,
 	    else
 	      target_addr = ALIGN_UP (image_target->link_addr
 				      + layout.kernel_size + total_module_size, 32);
+	    target_addr |= 0xffffffff80000000LL;
 	  }
 	else
 	  target_addr = image_target->link_addr;
-	if (image_target->voidp_sizeof == 4)
+	if (image_target->voidp_sizeof == 4 && image_target->id != IMAGE_LOONGSON_ELF)
 	  grub_mkimage_generate_elf32 (image_target, note, &core_img, &core_size,
 				       target_addr, &layout);
 	else
