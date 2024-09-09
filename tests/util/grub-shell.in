@@ -144,7 +144,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
     mipsel-loongson)
 	boot=mipsel_fulong2e
 	qemu=qemu-system-mips64el
-	qemuopts="-M fulong2e $qemuopts"
+	qemuopts="-M fuloong2e $qemuopts"
 	console=
 	trim=1
 	;;
