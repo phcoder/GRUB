@@ -56,7 +56,7 @@ codestart:
 	sethi	%hi(GRUB_KERNEL_MACHINE_STACK_SIZE), %o5
 	or	%o5, %lo(GRUB_KERNEL_MACHINE_STACK_SIZE), %o5
 	add     %o3, %o5, %o6
-	and     %o6, ~0xff, %o6
+	and     %o6, 0xffffffffffffff00, %o6
 	sub     %o6, 2047, %o6
 	
 	sub	%o2, 4, %o2

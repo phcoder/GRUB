@@ -93,7 +93,10 @@ prom_exit_name:		.asciz "exit"
 grub_name:		.asciz "GRUB "
 #ifdef CDBOOT
 prom_close_name:	.asciz "close"
+			.byte 0
+			.byte 0
 #endif
+			.byte 0
 
 #define GRUB_NAME_LEN	5
 

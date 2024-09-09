@@ -43,6 +43,9 @@ notification_step:		.asciz "."
 notification_done:		.asciz "\r\n"
 #define NOTIFICATION_DONE_LEN	2
 
+	.byte 0
+	.byte 0
+
 	.align	4
 
 	/* %o2: message string
