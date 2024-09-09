@@ -144,9 +144,10 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
     mipsel-loongson)
 	boot=mipsel_fulong2e
 	qemu=qemu-system-mips64el
-	qemuopts="-M fuloong2e $qemuopts"
+	qemuopts="-M fuloong2e $qemuopts -no-reboot"
 	console=
 	trim=1
+	halt_cmd=reboot
 	;;
     i386-coreboot)
 	boot=coreboot
