@@ -165,6 +165,12 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	console=console
 	trim=1
 	disk="hdb "
+	if ! [ -f ${srcdir}/ofwx86.bin ]; then
+	    echo "Firmware not found, please install an appropriately named copy in the source directory." >&2
+	    exit 1
+	fi
+	cp ${srcdir}/ofwx86.bin "${work_directory}/ofwx86.bin"
+	qemuopts="-bios ${work_directory}/ofwx86.bin -vga cirrus $qemuopts"
 	;;
     i386-qemu)
 	boot=qemu
