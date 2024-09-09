@@ -209,5 +209,12 @@ void EXPORT_FUNC (___chkstk_ms) (void);
 void EXPORT_FUNC (__chkstk_ms) (void);
 #endif
 
+#if defined(__sparc__) && defined(__clang__)
+/* Copied from multi3.c which is under MIT license.  */
+typedef int      grub_clang_ti_int __attribute__ ((mode (TI)));
+
+grub_clang_ti_int EXPORT_FUNC(__multi3) (grub_clang_ti_int a, grub_clang_ti_int b);
+#endif
+
 #endif
 
