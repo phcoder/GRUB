@@ -222,7 +222,7 @@ struct grub_btrfs_extent_data
       grub_uint64_t compressed_size;
       grub_uint64_t offset;
       grub_uint64_t filled;
-    };
+    } GRUB_PACKED;
   };
 } GRUB_PACKED;
 
