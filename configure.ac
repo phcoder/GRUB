@@ -953,6 +953,11 @@ if test x"$platform" != xemu ; then
        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
 		         [grub_cv_target_cc_soft_float="-m4-nofpu"], [])
     fi
+    if test "x$target_cpu" = xarm; then
+       CFLAGS="$TARGET_CFLAGS -msoft-float -mfloat-abi=soft -Werror"
+       AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+		         [grub_cv_target_cc_soft_float="-msoft-float -mfloat-abi=soft"], [])
+    fi
     for cand in "-msoft-float -Xclang -msoft-float -Xclang -no-implicit-float" \
 		"-Xclang -msoft-float -Xclang -no-implicit-float" \
 		"-Xclang -msoft-float" "-msoft-float"; do
