@@ -26,6 +26,7 @@
 #include <grub/i18n.h>
 #include <grub/types.h>
 #include <grub/charset.h>
+#include <grub/safemath.h>
 
 union printf_arg
 {
@@ -472,7 +473,7 @@ grub_strtoull (const char * restrict str, const char ** const restrict end,
       found = 1;
 
       /* NUM * BASE + DIGIT > ~0ULL */
-      if (num > grub_divmod64 (~0ULL - digit, base, 0))
+      if (grub_mul(num, base, &num) || grub_add(num, digit, &num))
 	{
 	  grub_error (GRUB_ERR_OUT_OF_RANGE,
 		      N_("overflow is detected"));
@@ -483,7 +484,6 @@ grub_strtoull (const char * restrict str, const char ** const restrict end,
 	  return ~0ULL;
 	}
 
-      num = num * base + digit;
       str++;
     }
 
