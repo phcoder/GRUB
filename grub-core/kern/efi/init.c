@@ -72,8 +72,14 @@ __stack_chk_fail (void)
   while (1);
 }
 
-grub_addr_t
-grub_stack_protector_init (void)
+void __attribute__ ((noreturn))
+_stack_chk_fail (void)
+{
+  __stack_chk_fail ();
+}
+
+static void
+stack_protector_init (void)
 {
   grub_efi_rng_protocol_t *rng;
 
@@ -84,10 +90,12 @@ grub_stack_protector_init (void)
       grub_efi_status_t status;
       grub_addr_t guard = 0;
 
-      status = rng->get_rng (rng, NULL, sizeof (guard) - 1,
-		             (grub_efi_uint8_t *) &guard);
-      if (status == GRUB_EFI_SUCCESS)
-	return guard;
+      status = rng->get_rng (rng, NULL, sizeof (stack_chk_guard_buf),
+			     stack_chk_guard_buf);
+      if (status == GRUB_EFI_SUCCESS) {
+	grub_memcpy (&__stack_chk_guard, stack_chk_guard_buf, sizeof (__stack_chk_guard));
+	grub_memcpy (&_stack_chk_guard, stack_chk_guard_buf, sizeof (_stack_chk_guard));
+      }
     }
   return 0;
 }

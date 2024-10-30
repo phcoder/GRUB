@@ -95,8 +95,10 @@ grub_efi_drop_alloc (grub_efi_physical_address_t address,
 
   for (eap = NULL, ea = efi_allocated_memory; ea; eap = ea, ea = ea->next)
     {
-      if (ea->address != address || ea->pages != pages)
-         continue;
+      if (ea->address != address)
+	continue;
+      if (ea->pages != pages)
+	grub_fatal ("grub_efi_drop_alloc() called with wrong page count");
 
       /* Remove the current entry from the list. */
       if (eap)
@@ -150,7 +152,7 @@ grub_efi_allocate_pages_real (grub_efi_physical_address_t address,
 	 so reallocate another one.  */
       address = GRUB_EFI_MAX_USABLE_ADDRESS;
       status = b->allocate_pages (alloctype, memtype, pages, &address);
-      grub_efi_free_pages (0, pages);
+      b->free_pages (0, pages);
       if (status != GRUB_EFI_SUCCESS)
 	{
 	  grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
@@ -574,13 +576,15 @@ grub_efi_mm_add_regions (grub_size_t required_bytes, unsigned int flags)
   grub_efi_memory_descriptor_t *memory_map_end;
   grub_efi_memory_descriptor_t *filtered_memory_map;
   grub_efi_memory_descriptor_t *filtered_memory_map_end;
+  grub_efi_uintn_t alloc_size;
   grub_efi_uintn_t map_size;
   grub_efi_uintn_t desc_size;
   grub_err_t err;
   int mm_status;
 
   /* Prepare a memory region to store two memory maps.  */
-  memory_map = grub_efi_allocate_any_pages (2 * BYTES_TO_PAGES (MEMORY_MAP_SIZE));
+  alloc_size = 2 * BYTES_TO_PAGES (MEMORY_MAP_SIZE);
+  memory_map = grub_efi_allocate_any_pages (alloc_size);
   if (! memory_map)
     return grub_error (GRUB_ERR_OUT_OF_MEMORY, "cannot allocate memory for memory map");
 
@@ -591,14 +595,13 @@ grub_efi_mm_add_regions (grub_size_t required_bytes, unsigned int flags)
 
   if (mm_status == 0)
     {
-      grub_efi_free_pages
-	((grub_efi_physical_address_t) ((grub_addr_t) memory_map),
-	 2 * BYTES_TO_PAGES (MEMORY_MAP_SIZE));
+      grub_efi_free_pages ((grub_efi_physical_address_t)(grub_addr_t) memory_map, alloc_size);
 
       /* Freeing/allocating operations may increase memory map size.  */
       map_size += desc_size * 32;
 
-      memory_map = grub_efi_allocate_any_pages (2 * BYTES_TO_PAGES (map_size));
+      alloc_size = 2 * BYTES_TO_PAGES (map_size);
+      memory_map = grub_efi_allocate_any_pages (alloc_size);
       if (! memory_map)
 	return grub_error (GRUB_ERR_OUT_OF_MEMORY, "cannot allocate memory for new memory map");
 
@@ -642,8 +645,7 @@ grub_efi_mm_add_regions (grub_size_t required_bytes, unsigned int flags)
 #endif
 
   /* Release the memory maps.  */
-  grub_efi_free_pages ((grub_addr_t) memory_map,
-		       2 * BYTES_TO_PAGES (MEMORY_MAP_SIZE));
+  grub_efi_free_pages ((grub_efi_physical_address_t)(grub_addr_t) memory_map, alloc_size);
 
   return GRUB_ERR_NONE;
 }

@@ -1471,6 +1471,11 @@ module = {
 };
 
 module = {
+  name = erofs;
+  common = fs/erofs.c;
+};
+
+module = {
   name = ext2;
   common = fs/ext2.c;
 };

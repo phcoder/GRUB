@@ -323,17 +323,22 @@ zstd_decompress (void *ibuf, void *obuf, grub_size_t isize,
 		 grub_size_t osize)
 {
   grub_size_t zstd_ret;
+  grub_uint32_t c_len;
   grub_uint8_t *byte_buf = (grub_uint8_t *) ibuf;
 
   if (isize < 8)
       return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "zstd data too short");
 
-  grub_uint32_t c_len = grub_be_to_cpu32(grub_get_unaligned32(byte_buf));
+  c_len = grub_be_to_cpu32 (grub_get_unaligned32 (byte_buf));
 
   if (c_len > isize - 8)
-      return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "zstd data announced size overflow");
+      return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+			 "zstd data announced size overflow");
 
-  /* Fix magic number.  */
+  /*
+   * ZFS uses non-stadard magic for zstd streams. Rather than adjusting
+   * library functions, replace non-standard magic with standard one.
+   */
   byte_buf[4] = 0x28;
   byte_buf[5] = 0xb5;
   byte_buf[6] = 0x2f;
@@ -341,7 +346,8 @@ zstd_decompress (void *ibuf, void *obuf, grub_size_t isize,
   zstd_ret = ZSTD_decompress (obuf, osize, byte_buf + 4, c_len + 4);
 
   if (ZSTD_isError (zstd_ret))
-    return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "zstd data corrupted (error %d)", (int) zstd_ret);
+    return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+		       "zstd data corrupted (error %d)", (int) zstd_ret);
 
   return GRUB_ERR_NONE;
 }

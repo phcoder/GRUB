@@ -100,6 +100,7 @@ library = {
   common = grub-core/fs/odc.c;
   common = grub-core/fs/newc.c;
   common = grub-core/fs/esfs.c;
+  common = grub-core/fs/erofs.c;
   common = grub-core/fs/ext2.c;
   common = grub-core/fs/fat.c;
   common = grub-core/fs/exfat.c;
@@ -763,6 +764,12 @@ script = {
   common = tests/util/grub-fs-tester.in;
   installdir = noinst;
   dependencies = 'garbage-gen$(BUILD_EXEEXT)';
+};
+
+script = {
+  testcase = native;
+  name = erofs_test;
+  common = tests/erofs_test.in;
 };
 
 script = {
