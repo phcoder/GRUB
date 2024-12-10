@@ -216,7 +216,7 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr, grub_size_t size, char *args)
 
   grub_dprintf ("linux", "linux command line: '%s'\n", args);
 
-  /* Convert command line to UCS-2 */
+  /* Convert command line to UTF-16. */
   loaded_image = grub_efi_get_loaded_image (image_handle);
   if (loaded_image == NULL)
     {
@@ -226,7 +226,7 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr, grub_size_t size, char *args)
   loaded_image->load_options_size = len =
     (grub_strlen (args) + 1) * sizeof (grub_efi_char16_t);
   loaded_image->load_options =
-    grub_efi_allocate_any_pages (GRUB_EFI_BYTES_TO_PAGES (loaded_image->load_options_size));
+    grub_efi_allocate_any_pages (GRUB_EFI_BYTES_TO_PAGES (len));
   if (!loaded_image->load_options)
     return grub_errno;
 
@@ -240,7 +240,8 @@ grub_arch_efi_linux_boot_image (grub_addr_t addr, grub_size_t size, char *args)
   /* When successful, not reached */
   grub_error (GRUB_ERR_BAD_OS, "start_image() returned 0x%" PRIxGRUB_EFI_UINTN_T, status);
   grub_efi_free_pages ((grub_addr_t) loaded_image->load_options,
-		       GRUB_EFI_BYTES_TO_PAGES (loaded_image->load_options_size));
+		       GRUB_EFI_BYTES_TO_PAGES (len));
+  loaded_image->load_options = NULL;
 unload:
   b->unload_image (image_handle);
 

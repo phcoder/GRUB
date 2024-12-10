@@ -536,7 +536,7 @@ image = {
 
 image = {
   name = xz_decompress;
-  mips = boot/mips/startup_raw.S;
+  mips_head = boot/mips/startup_raw.S;
   common = boot/decompressor/minilib.c;
   common = boot/decompressor/xz.c;
   common = lib/xzembed/xz_dec_bcj.c;
@@ -554,7 +554,7 @@ image = {
 
 image = {
   name = none_decompress;
-  mips = boot/mips/startup_raw.S;
+  mips_head = boot/mips/startup_raw.S;
   common = boot/decompressor/none.c;
 
   cppflags = '-DGRUB_EMBED_DECOMPRESSOR=1';
@@ -1297,6 +1297,11 @@ module = {
 module = {
   name = raid6rec;
   common = disk/raid6_recover.c;
+};
+
+module = {
+  name = key_protector;
+  common = disk/key_protector.c;
 };
 
 module = {
@@ -2638,6 +2643,34 @@ module = {
 };
 
 module = {
+  name = tss2;
+  common = lib/tss2/buffer.c;
+  common = lib/tss2/tss2_mu.c;
+  common = lib/tss2/tpm2_cmd.c;
+  common = lib/tss2/tss2.c;
+  efi = lib/efi/tcg2.c;
+  emu = lib/tss2/tcg2_emu.c;
+  powerpc_ieee1275 = lib/ieee1275/tcg2.c;
+  enable = efi;
+  enable = emu;
+  enable = powerpc_ieee1275;
+  cppflags = '-I$(srcdir)/lib/tss2';
+};
+
+module = {
+  name = tpm2_key_protector;
+  common = commands/tpm2_key_protector/args.c;
+  common = commands/tpm2_key_protector/module.c;
+  common = commands/tpm2_key_protector/tpm2key.c;
+  common = commands/tpm2_key_protector/tpm2key_asn1_tab.c;
+  /* The plaform support of tpm2_key_protector depends on the tcg2 implementation in tss2. */
+  enable = efi;
+  enable = emu;
+  enable = powerpc_ieee1275;
+  cppflags = '-I$(srcdir)/lib/tss2 -I$(srcdir)/lib/libtasn1-grub';
+};
+
+module = {
   name = tr;
   common = commands/tr.c;
 };
@@ -2680,4 +2713,34 @@ module = {
   efi = commands/bli.c;
   enable = efi;
   depends = part_gpt;
+};
+
+module = {
+  name = asn1;
+  common = lib/libtasn1-grub/lib/decoding.c;
+  common = lib/libtasn1-grub/lib/coding.c;
+  common = lib/libtasn1-grub/lib/element.c;
+  common = lib/libtasn1-grub/lib/structure.c;
+  common = lib/libtasn1-grub/lib/parser_aux.c;
+  common = lib/libtasn1-grub/lib/gstr.c;
+  common = lib/libtasn1-grub/lib/errors.c;
+  common = lib/libtasn1_wrap/wrap.c;
+  cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
+  /* -Wno-type-limits comes from configure.ac of libtasn1 */
+  cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/libtasn1-grub -I$(srcdir)/lib/libtasn1-grub/lib -Wno-type-limits';
+};
+
+module = {
+  name = asn1_test;
+  common = tests/asn1/tests/CVE-2018-1000654.c;
+  common = tests/asn1/tests/object-id-decoding.c;
+  common = tests/asn1/tests/object-id-encoding.c;
+  common = tests/asn1/tests/octet-string.c;
+  common = tests/asn1/tests/reproducers.c;
+  common = tests/asn1/tests/Test_overflow.c;
+  common = tests/asn1/tests/Test_simple.c;
+  common = tests/asn1/tests/Test_strings.c;
+  common = tests/asn1/asn1_test.c;
+  cflags = '-Wno-uninitialized';
+  cppflags = '-I$(srcdir)/lib/libtasn1-grub -I$(srcdir)/tests/asn1/';
 };
