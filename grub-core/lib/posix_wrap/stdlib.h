@@ -67,7 +67,9 @@ abort (void)
 #define strtol grub_strtol
 
 /* for libgcrypt */
+#ifndef HAVE_STRTOUL
 #define HAVE_STRTOUL
+#endif
 #define strtoul grub_strtoul
 
 #define strtoull grub_strtoull
