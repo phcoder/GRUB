@@ -31,6 +31,24 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 #define QCOW_MAGIC 0x514649fb
 #define LX_OFFSET_MASK 0xfffffffffffe00LL
+
+struct qcow1_header
+{
+  grub_uint32_t magic;
+  grub_uint32_t version;
+  grub_uint64_t backing_file_offset;
+  grub_uint32_t backing_file_size;
+
+  grub_uint32_t mtime;
+  grub_uint64_t size;
+
+  grub_uint8_t  cluster_bits;
+  grub_uint8_t  l2_bits;
+  grub_uint32_t crypt_method;
+
+  grub_uint64_t l1_table_offset;
+};
+
 struct qcow_header
 {
   grub_uint32_t magic;
@@ -70,7 +88,13 @@ struct grub_qcow
   char *devname;
   grub_file_t file;
   unsigned long id;
-  struct qcow_header head;
+  union {
+    struct qcow_header v2;
+    struct qcow1_header v1;
+  } head;
+  grub_uint32_t cluster_bits;
+  grub_uint32_t l1_size;
+  grub_uint64_t size;
   grub_uint64_t *l1;
   grub_uint64_t *l2_0;
   grub_uint64_t *l2_cache;
@@ -92,37 +116,63 @@ static const struct grub_arg_option options[] =
 static grub_err_t
 open_qcow (struct grub_qcow *qcow)
 {
+  grub_size_t l1_bytes;
+  grub_uint64_t l1_table_offset;
   grub_file_read (qcow->file, &qcow->head, sizeof(qcow->head));
   if (grub_errno)
     return grub_errno;
-  if (qcow->head.magic != grub_cpu_to_be32_compile_time(QCOW_MAGIC))
+  if (qcow->head.v2.magic != grub_cpu_to_be32_compile_time(QCOW_MAGIC))
     return grub_error(GRUB_ERR_BAD_ARGUMENT, "invalid qcow magic");
-  if (qcow->head.version != grub_cpu_to_be32_compile_time(2)
-      && qcow->head.version != grub_cpu_to_be32_compile_time(3))
+  if (qcow->head.v2.version == grub_cpu_to_be32_compile_time(1)) {
+    if (qcow->head.v1.backing_file_offset || qcow->head.v1.backing_file_size)
+      return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "qcow backing file unsupported");
+    if (qcow->head.v1.crypt_method)
+      return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted qcow is not supported");
+
+    qcow->cluster_bits = qcow->head.v1.cluster_bits;
+    qcow->compression_type = 0;
+    qcow->size = grub_be_to_cpu64(qcow->head.v1.size);
+    int l1_shift = qcow->cluster_bits + qcow->head.v1.l2_bits;
+    qcow->l1_size = (qcow->size + (1 << l1_shift) - 1) >> l1_shift;
+    l1_table_offset = grub_be_to_cpu64(qcow->head.v1.l1_table_offset);
+  } else if (qcow->head.v2.version == grub_cpu_to_be32_compile_time(2)
+	     || qcow->head.v2.version == grub_cpu_to_be32_compile_time(3)) {
+    if (qcow->head.v2.backing_file_offset || qcow->head.v2.backing_file_size)
+      return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "qcow backing file unsupported");
+    if (qcow->head.v2.crypt_method)
+      return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted qcow is not supported");
+
+    if (grub_be_to_cpu32(qcow->head.v2.l1_size) >= (1 << 28))
+      return grub_error(GRUB_ERR_BAD_ARGUMENT, "qcow l1 table is too large");
+    if (!qcow->head.v2.l1_size)
+      return grub_error(GRUB_ERR_BAD_ARGUMENT, "L1 table is missing");
+    qcow->cluster_bits = grub_be_to_cpu32(qcow->head.v2.cluster_bits);
+    grub_uint32_t header_length = qcow->head.v2.version == grub_cpu_to_be32_compile_time(3) ? grub_be_to_cpu32(qcow->head.v2.header_length) : 72;
+    qcow->compression_type = (header_length >= 105) ? qcow->head.v2.compression_type : 0;
+    l1_table_offset = grub_be_to_cpu64(qcow->head.v2.l1_table_offset);
+    qcow->size = grub_be_to_cpu64(qcow->head.v2.size);
+    qcow->l1_size = grub_be_to_cpu32(qcow->head.v2.l1_size);
+  } else {
     return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported qcow version");
-  if (qcow->head.backing_file_offset || qcow->head.backing_file_size)
-    return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "qcow backing file unsupported");
-  if (qcow->head.crypt_method)
-    return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted qcow is not supported");
+  }
 
-  if (grub_be_to_cpu32(qcow->head.l1_size) >= (1 << 28))
+  if (qcow->l1_size >= (1 << 28))
     return grub_error(GRUB_ERR_BAD_ARGUMENT, "qcow l1 table is too large");
-  if (!qcow->head.l1_size)
-    return grub_error(GRUB_ERR_BAD_ARGUMENT, "L1 table is missing");
-  if (grub_be_to_cpu32(qcow->head.cluster_bits) >= 26)
-    return grub_error(GRUB_ERR_BAD_ARGUMENT, "qcow cluster size is too large");
+  if (qcow->cluster_bits >= 26)
+      return grub_error(GRUB_ERR_BAD_ARGUMENT, "qcow cluster size is too large");
 
-  grub_size_t l1_bytes = grub_be_to_cpu32(qcow->head.l1_size) << 3;
+  l1_bytes = qcow->l1_size << 3;
+
   qcow->l1 = grub_malloc(l1_bytes);
   if (!qcow->l1)
     return grub_errno;
 
-  grub_file_seek (qcow->file, grub_be_to_cpu64(qcow->head.l1_table_offset));
+  grub_file_seek (qcow->file, l1_table_offset);
   grub_file_read (qcow->file, qcow->l1, l1_bytes);
   if (grub_errno)
     return grub_errno;
 
-  grub_size_t l2_bytes = 1 << grub_be_to_cpu32(qcow->head.cluster_bits);
+  grub_size_t l2_bytes = 1 << qcow->cluster_bits;
   qcow->l2_0 = grub_zalloc(l2_bytes);
   qcow->l2_cache = grub_zalloc(l2_bytes);
   if (!qcow->l2_0 || !qcow->l2_cache)
@@ -139,9 +189,6 @@ open_qcow (struct grub_qcow *qcow)
     }
   if (grub_errno)
     return grub_errno;
-
-  grub_uint32_t header_length = qcow->head.version == grub_cpu_to_be32_compile_time(3) ? grub_be_to_cpu32(qcow->head.header_length) : 72;
-  qcow->compression_type = (header_length >= 105) ? qcow->head.compression_type : 0;
 
   return GRUB_ERR_NONE;
 }
@@ -268,7 +315,7 @@ grub_qcow_open (const char *name, grub_disk_t disk)
     return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
 
   /* Use the filesize for the disk size, round up to a complete sector.  */
-  disk->total_sectors = grub_be_to_cpu64(dev->head.size) >> GRUB_DISK_SECTOR_BITS;
+  disk->total_sectors = dev->size >> GRUB_DISK_SECTOR_BITS;
   /* Avoid reading more than 512M.  */
   disk->max_agglomerate = 1 << (29 - GRUB_DISK_SECTOR_BITS
 				- GRUB_DISK_CACHE_BITS);
@@ -283,8 +330,8 @@ grub_qcow_open (const char *name, grub_disk_t disk)
 static grub_err_t
 get_l2_entry(struct grub_qcow *qcow, grub_uint64_t cluster, grub_uint64_t *l2e)
 {
-  grub_size_t l2_bytes = 1 << grub_be_to_cpu32(qcow->head.cluster_bits);
-  grub_uint64_t l2_table_bits = grub_be_to_cpu32(qcow->head.cluster_bits) - 3;
+  grub_size_t l2_bytes = 1 << qcow->cluster_bits;
+  grub_uint64_t l2_table_bits = qcow->cluster_bits - 3;
   grub_uint64_t l2n = cluster & ((1 << l2_table_bits) - 1);
   grub_uint64_t l1n = cluster >> l2_table_bits;
   if (qcow->l1[l1n] == 0)
@@ -293,7 +340,7 @@ get_l2_entry(struct grub_qcow *qcow, grub_uint64_t cluster, grub_uint64_t *l2e)
       return GRUB_ERR_NONE;
     }
     
-  if (l1n >= grub_be_to_cpu32(qcow->head.l1_size))
+  if (l1n >= qcow->l1_size)
     return grub_error(GRUB_ERR_IO, "seeking outside of L1 table");
   if (l1n == 0)
     {
@@ -321,7 +368,7 @@ grub_qcow_read (grub_disk_t disk, grub_disk_addr_t sector,
 		    grub_size_t size, char *buf)
 {
   struct grub_qcow *qcow = (struct grub_qcow *) disk->data;
-  unsigned cluster_sec_bits = grub_be_to_cpu32(qcow->head.cluster_bits) - GRUB_DISK_SECTOR_BITS;
+  unsigned cluster_sec_bits = qcow->cluster_bits - GRUB_DISK_SECTOR_BITS;
   grub_uint64_t cluster_sec_size = 1 << cluster_sec_bits;
   grub_uint64_t cluster = sector >> cluster_sec_bits;
   grub_size_t cluster_sec_offset = sector & ((1 << cluster_sec_bits) - 1);
@@ -362,7 +409,7 @@ grub_qcow_read (grub_disk_t disk, grub_disk_addr_t sector,
       /* Compressed.  */
       else
 	{
-	  int offset_bits = 62 - (grub_be_to_cpu32(qcow->head.cluster_bits) - 8);
+	  int offset_bits = 62 - (qcow->cluster_bits - 8);
 	  grub_uint64_t off = l2e & ((1LL << offset_bits) - 1);
 	  grub_uint32_t compressed_size = (((l2e & 0x3fffffffffffffffLL) >> offset_bits) << 9) + 0x200 - (off & 0x1ff);
 	  if (qcow->compression_type > 1)
