@@ -3018,7 +3018,7 @@ fzap_iterate (dnode_phys_t * zap_dnode, zap_phys_t * zap,
 	  if (le->le_type != ZAP_CHUNK_ENTRY)
 	    continue;
 
-	  if (grub_mul (grub_zfs_to_cpu16 (le->le_name_length, endian), name_elem_length, &sz) ||
+	  if (grub_mul (le->le_name_length, name_elem_length, &sz) ||
 	      grub_add (sz, 1, &sz))
 	    {
 	      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("buffer size overflow"));
