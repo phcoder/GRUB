@@ -28,6 +28,7 @@
 #include <grub/procfs.h>
 #include <grub/partition.h>
 #include <grub/key_protector.h>
+#include <grub/safemath.h>
 
 #ifdef GRUB_UTIL
 #include <grub/emu/hostdisk.h>
@@ -1186,6 +1187,9 @@ grub_cryptodisk_scan_device_real (const char *name,
 	      ret = grub_cryptodisk_insert (dev, name, source);
 	      if (ret != GRUB_ERR_NONE)
 		goto error;
+#ifndef GRUB_UTIL
+	      grub_cli_set_auth_needed ();
+#endif
 	      goto cleanup;
 	    }
 	}
@@ -1528,7 +1532,7 @@ grub_cmd_cryptomount (grub_extcmd_context_t ctxt, int argc, char **args)
 
   if (state[OPTION_PROTECTOR].set) /* key protector(s) */
     {
-      cargs.key_cache = grub_zalloc (state[OPTION_PROTECTOR].set * sizeof (*cargs.key_cache));
+      cargs.key_cache = grub_calloc (state[OPTION_PROTECTOR].set, sizeof (*cargs.key_cache));
       if (cargs.key_cache == NULL)
 	return grub_error (GRUB_ERR_OUT_OF_MEMORY,
 			   "no memory for key protector key cache");
@@ -1651,7 +1655,7 @@ static char *
 luks_script_get (grub_size_t *sz)
 {
   grub_cryptodisk_t i;
-  grub_size_t size = 0;
+  grub_size_t size = 0, mul;
   char *ptr, *ret;
 
   *sz = 0;
@@ -1660,10 +1664,6 @@ luks_script_get (grub_size_t *sz)
     if (grub_strcmp (i->modname, "luks") == 0 ||
 	grub_strcmp (i->modname, "luks2") == 0)
       {
-	size += grub_strlen (i->modname);
-	size += sizeof ("_mount");
-	size += grub_strlen (i->uuid);
-	size += grub_strlen (i->cipher->cipher->name);
 	/*
 	 * Add space in the line for (in order) spaces, cipher mode, cipher IV
 	 * mode, sector offset, sector size and the trailing newline. This is
@@ -1671,14 +1671,35 @@ luks_script_get (grub_size_t *sz)
 	 * in an earlier version of this code that are unaccounted for. It is
 	 * left in the calculations in case it is needed. At worst, its short-
 	 * lived wasted space.
+	 *
+	 * 60 = 5 + 5 + 8 + 20 + 6 + 1 + 15
 	 */
-	size += 5 + 5 + 8 + 20 + 6 + 1 + 15;
+	if (grub_add (size, grub_strlen (i->modname), &size) ||
+	    grub_add (size, sizeof ("_mount") + 60, &size) ||
+	    grub_add (size, grub_strlen (i->uuid), &size) ||
+	    grub_add (size, grub_strlen (i->cipher->cipher->name), &size) ||
+	    grub_mul (i->keysize, 2, &mul) ||
+	    grub_add (size, mul, &size))
+	  {
+	    grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
+	    return 0;
+	  }
 	if (i->essiv_hash)
-	  size += grub_strlen (i->essiv_hash->name);
-	size += i->keysize * 2;
+	  {
+	    if (grub_add (size, grub_strlen (i->essiv_hash->name), &size))
+	      {
+		grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
+		return 0;
+	      }
+	  }
       }
+  if (grub_add (size, 1, &size))
+    {
+      grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
+      return 0;
+    }
 
-  ret = grub_malloc (size + 1);
+  ret = grub_malloc (size);
   if (!ret)
     return 0;
 
@@ -1753,6 +1774,89 @@ luks_script_get (grub_size_t *sz)
   *sz = ptr - ret;
   return ret;
 }
+
+#ifdef GRUB_MACHINE_EFI
+grub_err_t
+grub_cryptodisk_challenge_password (void)
+{
+  grub_cryptodisk_t cr_dev;
+
+  for (cr_dev = cryptodisk_list; cr_dev != NULL; cr_dev = cr_dev->next)
+    {
+      grub_cryptodisk_dev_t cr;
+      grub_disk_t source = NULL;
+      grub_err_t ret = GRUB_ERR_NONE;
+      grub_cryptodisk_t dev = NULL;
+      char *part = NULL;
+      struct grub_cryptomount_args cargs = {0};
+
+      cargs.check_boot = 0;
+      cargs.search_uuid = cr_dev->uuid;
+
+      source = grub_disk_open (cr_dev->source);
+
+      if (source == NULL)
+	{
+	  ret = grub_errno;
+	  goto error_out;
+	}
+
+      FOR_CRYPTODISK_DEVS (cr)
+      {
+	dev = cr->scan (source, &cargs);
+	if (grub_errno)
+	  {
+	    ret = grub_errno;
+	    goto error_out;
+	  }
+	if (dev == NULL)
+	  continue;
+	break;
+      }
+
+      if (dev == NULL)
+	{
+	  ret = grub_error (GRUB_ERR_BAD_MODULE, "no cryptodisk module can handle this device");
+	  goto error_out;
+	}
+
+      part = grub_partition_get_name (source->partition);
+      grub_printf_ (N_("Enter passphrase for %s%s%s (%s): "), source->name,
+		    source->partition != NULL ? "," : "",
+		    part != NULL ? part : N_("UNKNOWN"), cr_dev->uuid);
+      grub_free (part);
+
+      cargs.key_data = grub_malloc (GRUB_CRYPTODISK_MAX_PASSPHRASE);
+      if (cargs.key_data == NULL)
+	{
+	  ret = grub_errno;
+	  goto error_out;
+	}
+
+      if (!grub_password_get ((char *) cargs.key_data, GRUB_CRYPTODISK_MAX_PASSPHRASE))
+	{
+	  ret = grub_error (GRUB_ERR_BAD_ARGUMENT, "passphrase not supplied");
+	  goto error_out;
+	}
+      cargs.key_len = grub_strlen ((char *) cargs.key_data);
+      ret = cr->recover_key (source, dev, &cargs);
+
+ error_out:
+      grub_disk_close (source);
+      if (dev != NULL)
+	cryptodisk_close (dev);
+      if (cargs.key_data)
+	{
+	  grub_memset (cargs.key_data, 0, cargs.key_len);
+	  grub_free (cargs.key_data);
+	}
+
+      return ret;
+    }
+
+  return GRUB_ERR_NONE;
+}
+#endif /* GRUB_MACHINE_EFI */
 
 struct grub_procfs_entry luks_script =
 {

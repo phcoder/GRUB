@@ -806,7 +806,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
     }
 
   linux_params.code32_start = prot_mode_target + lh.code32_start - GRUB_LINUX_BZIMAGE_ADDR;
-  linux_params.kernel_alignment = (1 << align);
+  linux_params.kernel_alignment = ((grub_uint32_t) 1 << align);
   linux_params.ps_mouse = linux_params.padding11 = 0;
   linux_params.type_of_loader = GRUB_LINUX_BOOT_LOADER_TYPE;
 
@@ -838,9 +838,10 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
 #ifdef GRUB_MACHINE_EFI
 #ifdef __x86_64__
   if (grub_le_to_cpu16 (linux_params.version) < 0x0208 &&
-      ((grub_addr_t) grub_efi_system_table >> 32) != 0)
-    return grub_error(GRUB_ERR_BAD_OS,
-		      "kernel does not support 64-bit addressing");
+      ((grub_addr_t) grub_efi_system_table >> 32) != 0) {
+    grub_errno = grub_error (GRUB_ERR_BAD_OS, "kernel does not support 64-bit addressing");
+    goto fail;
+  }
 #endif
 
   if (grub_le_to_cpu16 (linux_params.version) >= 0x0208)

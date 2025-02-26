@@ -27,6 +27,7 @@
 #include <grub/fshelp.h>
 #include <grub/ntfs.h>
 #include <grub/charset.h>
+#include <grub/lockdown.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -69,6 +70,170 @@ res_attr_data_len (void *res_attr_ptr)
 {
   return u32at (res_attr_ptr, 0x10);
 }
+
+/*
+ * Check if the attribute is valid and doesn't exceed the allocated region.
+ * This accounts for resident and non-resident data.
+ *
+ * This is based off the documentation from the linux-ntfs project:
+ * https://flatcap.github.io/linux-ntfs/ntfs/concepts/attribute_header.html
+ */
+static bool
+validate_attribute (grub_uint8_t *attr, void *end)
+{
+  grub_size_t attr_size = 0;
+  grub_size_t min_size = 0;
+  grub_size_t spare = (grub_uint8_t *) end - attr;
+  /*
+   * Just used as a temporary variable to try and deal with cases where someone
+   * tries to overlap fields.
+   */
+  grub_size_t curr = 0;
+
+  /* Need verify we can entirely read the attributes header. */
+  if (attr + GRUB_NTFS_ATTRIBUTE_HEADER_SIZE >= (grub_uint8_t *) end)
+    goto fail;
+
+  /*
+   * So, the rest of this code uses a 16bit int for the attribute length but
+   * from reading the all the documentation I could find it says this field is
+   * actually 32bit. But let's be consistent with the rest of the code.
+   *
+   * https://elixir.bootlin.com/linux/v6.10.7/source/fs/ntfs3/ntfs.h#L370
+   */
+  attr_size = u16at (attr, GRUB_NTFS_ATTRIBUTE_LENGTH);
+
+  if (attr_size > spare)
+    goto fail;
+
+  /* Not an error case, just reached the end of the attributes. */
+  if (attr_size == 0)
+    return false;
+
+  /*
+   * Extra validation by trying to calculate a minimum possible size for this
+   * attribute. +8 from the size of the resident data struct which is the
+   * minimum that can be added.
+   */
+  min_size = GRUB_NTFS_ATTRIBUTE_HEADER_SIZE + 8;
+
+  if (min_size > attr_size)
+    goto fail;
+
+  /* Is the data is resident (0) or not (1). */
+  if (attr[GRUB_NTFS_ATTRIBUTE_RESIDENT] == 0)
+    {
+      /* Read the offset and size of the attribute. */
+      curr = u16at (attr, GRUB_NTFS_ATTRIBUTE_RES_OFFSET);
+      curr += u32at (attr, GRUB_NTFS_ATTRIBUTE_RES_LENGTH);
+      if (curr > min_size)
+	min_size = curr;
+    }
+  else
+    {
+      /*
+       * If the data is non-resident, the minimum size is 64 which is where
+       * the data runs start. We already have a minimum size of 24. So, just
+       * adding 40 to get to the real value.
+       */
+      min_size += 40;
+      if (min_size > attr_size)
+	goto fail;
+      /* If the compression unit size is > 0, +8 bytes*/
+      if (u16at (attr, GRUB_NTFS_ATTRIBUTE_COMPRESSION_UNIT_SIZE) > 0)
+	min_size += 8;
+
+      /*
+       * Need to consider the data runs now. Each member of the run has byte
+       * that describes the size of the data length and offset. Each being
+       * 4 bits in the byte.
+       */
+      curr = u16at (attr, GRUB_NTFS_ATTRIBUTE_DATA_RUNS);
+
+      if (curr + 1 > min_size)
+	min_size = curr + 1;
+
+      if (min_size > attr_size)
+	goto fail;
+
+      /*
+       * Each attribute can store multiple data runs which are stored
+       * continuously in the attribute. They exist as one header byte
+       * with up to 14 bytes following it depending on the lengths.
+       * We stop when we hit a header that is just a NUL byte.
+       *
+       * https://flatcap.github.io/linux-ntfs/ntfs/concepts/data_runs.html
+       */
+      while (attr[curr] != 0)
+	{
+	  /*
+	   * We stop when we hit a header that is just a NUL byte. The data
+	   * run header is stored as a single byte where the top 4 bits refer
+	   * to the number of bytes used to store the total length of the
+	   * data run, and the number of bytes used to store the offset.
+	   * These directly follow the header byte, so we use them to update
+	   * the minimum size.
+	   */
+	  min_size += (attr[curr] & 0x7) + ((attr[curr] >> 4) & 0x7);
+	  curr += min_size;
+	  min_size++;
+	  if (min_size > attr_size)
+	    goto fail;
+	}
+    }
+
+  /* Name offset, doing this after data residence checks. */
+  if (u16at (attr, GRUB_NTFS_ATTRIBUTE_NAME_OFFSET) != 0)
+    {
+      curr = u16at (attr, GRUB_NTFS_ATTRIBUTE_NAME_OFFSET);
+      /*
+       * Multiple the name length by 2 as its UTF-16. Can be zero if this in an
+       * unamed attribute.
+       */
+      curr += attr[GRUB_NTFS_ATTRIBUTE_NAME_LENGTH] * 2;
+      if (curr > min_size)
+	min_size = curr;
+    }
+
+  /* Padded to 8 bytes. */
+  if (min_size % 8 != 0)
+    min_size += 8 - (min_size % 8);
+
+  /*
+   * At this point min_size should be exactly attr_size but being flexible
+   * here to avoid any issues.
+   */
+  if (min_size > attr_size)
+    goto fail;
+
+  return true;
+
+ fail:
+  grub_dprintf ("ntfs", "spare=%" PRIuGRUB_SIZE " min_size=%" PRIuGRUB_SIZE " attr_size=%" PRIuGRUB_SIZE "\n",
+		spare, min_size, attr_size);
+  return false;
+}
+
+/* Return the next attribute if it exists, otherwise return NULL. */
+static grub_uint8_t *
+next_attribute (grub_uint8_t *curr_attribute, void *end)
+{
+  grub_uint8_t *next = curr_attribute;
+
+  /*
+   * Need to verify we aren't exceeding the end of the buffer by reading the
+   * header for the current attribute
+   */
+  if (curr_attribute + GRUB_NTFS_ATTRIBUTE_HEADER_SIZE >= (grub_uint8_t *) end)
+    return NULL;
+
+  next += u16at (curr_attribute, 4);
+  if (validate_attribute (next, end) == false)
+    return NULL;
+
+  return next;
+}
+
 
 grub_ntfscomp_func_t grub_ntfscomp_func;
 
@@ -119,13 +284,20 @@ static grub_err_t read_data (struct grub_ntfs_attr *at, grub_uint8_t *pa,
 			     grub_disk_read_hook_t read_hook,
 			     void *read_hook_data);
 
-static void
+static grub_err_t
 init_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft)
 {
   at->mft = mft;
   at->flags = (mft == &mft->data->mmft) ? GRUB_NTFS_AF_MMFT : 0;
   at->attr_nxt = mft->buf + first_attr_off (mft->buf);
+  at->end = mft->buf + (mft->data->mft_size << GRUB_NTFS_BLK_SHR);
+
+  if (at->attr_nxt > at->end)
+    return grub_error (GRUB_ERR_BAD_FS, "attributes start outside the MFT");
+
   at->attr_end = at->emft_buf = at->edat_buf = at->sbuf = NULL;
+
+  return GRUB_ERR_NONE;
 }
 
 static void
@@ -139,16 +311,18 @@ free_attr (struct grub_ntfs_attr *at)
 static grub_uint8_t *
 find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 {
+  grub_uint8_t *mft_end;
+
   if (at->flags & GRUB_NTFS_AF_ALST)
     {
     retry:
-      while (at->attr_nxt < at->attr_end)
+      while (at->attr_nxt)
 	{
 	  at->attr_cur = at->attr_nxt;
-	  at->attr_nxt += u16at (at->attr_cur, 4);
+	  at->attr_nxt = next_attribute (at->attr_cur, at->attr_end);
 	  if ((*at->attr_cur == attr) || (attr == 0))
 	    {
-	      grub_uint8_t *new_pos;
+	      grub_uint8_t *new_pos, *end;
 
 	      if (at->flags & GRUB_NTFS_AF_MMFT)
 		{
@@ -172,15 +346,36 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 		    return NULL;
 		}
 
+	      /*
+	       * Only time emft_bufs is defined is in this function, with this
+	       * size.
+	       */
+	      grub_size_t emft_buf_size =
+	        at->mft->data->mft_size << GRUB_NTFS_BLK_SHR;
+
+	      /*
+	       * Needs to be enough space for the successful case to even
+	       * bother.
+	       */
+	      if (first_attr_off (at->emft_buf) >= (emft_buf_size - 0x18 - 2))
+		{
+		  grub_error (GRUB_ERR_BAD_FS,
+			      "can\'t find 0x%X in attribute list",
+			      (unsigned char) *at->attr_cur);
+		  return NULL;
+		}
+
 	      new_pos = &at->emft_buf[first_attr_off (at->emft_buf)];
-	      while (*new_pos != 0xFF)
+	      end = &at->emft_buf[emft_buf_size];
+
+	      while (new_pos && *new_pos != 0xFF)
 		{
 		  if ((*new_pos == *at->attr_cur)
 		      && (u16at (new_pos, 0xE) == u16at (at->attr_cur, 0x18)))
 		    {
 		      return new_pos;
 		    }
-		  new_pos += u16at (new_pos, 4);
+		  new_pos = next_attribute (new_pos, end);
 		}
 	      grub_error (GRUB_ERR_BAD_FS,
 			  "can\'t find 0x%X in attribute list",
@@ -191,9 +386,10 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
       return NULL;
     }
   at->attr_cur = at->attr_nxt;
-  while (*at->attr_cur != 0xFF)
+  mft_end = at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR);
+  while (at->attr_cur < mft_end && *at->attr_cur != 0xFF)
     {
-      at->attr_nxt += u16at (at->attr_cur, 4);
+      at->attr_nxt = next_attribute (at->attr_cur, at->end);
       if (*at->attr_cur == GRUB_NTFS_AT_ATTRIBUTE_LIST)
 	at->attr_end = at->attr_cur;
       if ((*at->attr_cur == attr) || (attr == 0))
@@ -236,13 +432,21 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 	  pa_end = at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR);
 	}
       at->flags |= GRUB_NTFS_AF_ALST;
-      while (at->attr_nxt < at->attr_end)
+
+      /* From this point on pa_end is the end of the buffer */
+      at->end = pa_end;
+
+      if (validate_attribute (at->attr_nxt, pa_end) == false)
+	return NULL;
+
+      while (at->attr_nxt)
 	{
 	  if ((*at->attr_nxt == attr) || (attr == 0))
 	    break;
-	  at->attr_nxt += u16at (at->attr_nxt, 4);
+	  at->attr_nxt = next_attribute (at->attr_nxt, pa_end);
 	}
-      if (at->attr_nxt >= at->attr_end)
+
+      if (at->attr_nxt >= at->attr_end || at->attr_nxt == NULL)
 	return NULL;
 
       if ((at->flags & GRUB_NTFS_AF_MMFT) && (attr == GRUB_NTFS_AT_DATA))
@@ -263,7 +467,11 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 				grub_cpu_to_le32 (at->mft->data->mft_start
 						  + 1));
 	  pa = at->attr_nxt + u16at (pa, 4);
-	  while (pa < at->attr_end)
+
+	  if (validate_attribute (pa, pa_end) == true)
+	    pa = NULL;
+
+	  while (pa)
 	    {
 	      if (*pa != attr)
 		break;
@@ -279,7 +487,7 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 		   u32at (pa, 0x10) * (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR),
 		   at->mft->data->mft_size << GRUB_NTFS_BLK_SHR, 0, 0, 0))
 		return NULL;
-	      pa += u16at (pa, 4);
+	      pa = next_attribute (pa, pa_end);
 	    }
 	  at->attr_nxt = at->attr_cur;
 	  at->flags &= ~GRUB_NTFS_AF_GPOS;
@@ -295,7 +503,9 @@ locate_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft,
 {
   grub_uint8_t *pa;
 
-  init_attr (at, mft);
+  if (init_attr (at, mft) != GRUB_ERR_NONE)
+    return NULL;
+
   pa = find_attr (at, attr);
   if (pa == NULL)
     return NULL;
@@ -311,7 +521,8 @@ locate_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft,
 	}
       grub_errno = GRUB_ERR_NONE;
       free_attr (at);
-      init_attr (at, mft);
+      if (init_attr (at, mft) != GRUB_ERR_NONE)
+	return NULL;
       pa = find_attr (at, attr);
     }
   return pa;
@@ -363,7 +574,7 @@ retry:
 	      goto retry;
 	    }
 	}
-      return grub_error (GRUB_ERR_BAD_FS, "run list overflown");
+      return grub_error (GRUB_ERR_BAD_FS, "run list overflow");
     }
   ctx->curr_vcn = ctx->next_vcn;
   ctx->next_vcn += read_run_data (run, c1, 0);	/* length of current VCN */
@@ -513,14 +724,17 @@ read_attr (struct grub_ntfs_attr *at, grub_uint8_t *dest, grub_disk_addr_t ofs,
       else
 	vcn = ofs >> (at->mft->data->log_spc + GRUB_NTFS_BLK_SHR);
       pa = at->attr_nxt + u16at (at->attr_nxt, 4);
-      while (pa < at->attr_end)
+      if (validate_attribute (pa, at->attr_end) == false)
+	pa = NULL;
+
+      while (pa)
 	{
 	  if (*pa != attr)
 	    break;
 	  if (u32at (pa, 8) > vcn)
 	    break;
 	  at->attr_nxt = pa;
-	  pa += u16at (pa, 4);
+	  pa = next_attribute (pa, at->attr_end);
 	}
     }
   pp = find_attr (at, attr);
@@ -582,7 +796,7 @@ init_file (struct grub_ntfs_file *mft, grub_uint64_t mftno)
 	mft->attr.attr_end = 0;	/*  Don't jump to attribute list */
     }
   else
-    init_attr (&mft->attr, mft);
+    return init_attr (&mft->attr, mft);
 
   return 0;
 }
@@ -808,7 +1022,9 @@ grub_ntfs_iterate_dir (grub_fshelp_node_t dir,
   bmp = NULL;
 
   at = &attr;
-  init_attr (at, mft);
+  if (init_attr (at, mft) != GRUB_ERR_NONE)
+    return 0;
+
   while (1)
     {
       cur_pos = find_attr (at, GRUB_NTFS_AT_INDEX_ROOT);
@@ -839,7 +1055,9 @@ grub_ntfs_iterate_dir (grub_fshelp_node_t dir,
   bitmap = NULL;
   bitmap_len = 0;
   free_attr (at);
+  /* No need to check errors here, as it will already be fine */
   init_attr (at, mft);
+
   while ((cur_pos = find_attr (at, GRUB_NTFS_AT_BITMAP)) != NULL)
     {
       int ofs;
@@ -1204,6 +1422,7 @@ grub_ntfs_label (grub_device_t device, char **label)
   struct grub_ntfs_data *data = 0;
   struct grub_fshelp_node *mft = 0;
   grub_uint8_t *pa;
+  grub_err_t err;
 
   grub_dl_ref (my_mod);
 
@@ -1229,7 +1448,10 @@ grub_ntfs_label (grub_device_t device, char **label)
 	goto fail;
     }
 
-  init_attr (&mft->attr, mft);
+  err = init_attr (&mft->attr, mft);
+  if (err != GRUB_ERR_NONE)
+    return err;
+
   pa = find_attr (&mft->attr, GRUB_NTFS_AT_VOLUME_NAME);
 
   if (pa >= mft->buf + (mft->data->mft_size << GRUB_NTFS_BLK_SHR))
@@ -1320,11 +1542,16 @@ static struct grub_fs grub_ntfs_fs =
 
 GRUB_MOD_INIT (ntfs)
 {
-  grub_fs_register (&grub_ntfs_fs);
+  if (!grub_is_lockdown ())
+    {
+      grub_ntfs_fs.mod = mod;
+      grub_fs_register (&grub_ntfs_fs);
+    }
   my_mod = mod;
 }
 
 GRUB_MOD_FINI (ntfs)
 {
-  grub_fs_unregister (&grub_ntfs_fs);
+  if (!grub_is_lockdown ())
+    grub_fs_unregister (&grub_ntfs_fs);
 }
