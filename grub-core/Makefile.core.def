@@ -788,6 +788,16 @@ module = {
 };
 
 module = {
+  name = xapic;
+
+  common = commands/i386/xapic.c;
+  common = lib/i386/smp.c;
+  common = lib/i386/smp_trampoline.S;
+
+  enable = x86;
+};
+
+module = {
   name = lsacpi;
 
   common = commands/lsacpi.c;
