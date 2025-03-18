@@ -37,7 +37,9 @@ begin:
 	shrw	$4, %ax
 	addw	%ax, (gdt_addr-begin+1)
 	addw	%ax, (procseg_addr-begin+1)
+#ifdef __x86_64__
 	addw	%ax, (cseg64_addr-begin+1)
+#endif
 
 	lgdtl	(gdtdesc-begin)
 

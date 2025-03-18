@@ -266,6 +266,6 @@ grub_smp_run (void (*f) (grub_uint32_t apicid))
 #ifdef __x86_64__
 #error "64-bit non-EFI isn't supported yet"
 #endif
-  grub_smp_x86_run (f, (void*) 0x7000, 0);
+  return grub_smp_x86_run (f, (void*) 0x7000, 0);
 #endif
 }
