@@ -599,6 +599,9 @@ grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
       grub_uint64_t set_attrs = GRUB_MEM_ATTR_R;
       grub_uint64_t clear_attrs = GRUB_MEM_ATTR_W | GRUB_MEM_ATTR_X;
 
+      if (p->p_memsz == 0)
+	continue;
+
       if (p->p_flags & PF_W)
 	{
 	  set_attrs |= GRUB_MEM_ATTR_W;
@@ -611,7 +614,11 @@ grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
 	  clear_attrs &= ~GRUB_MEM_ATTR_X;
 	}
 
-      err = grub_update_mem_attrs ((grub_addr_t) ((char *)mod->base + (p->p_vaddr - mod->min_addr)), p->p_memsz,
+      grub_addr_t from = (grub_addr_t) ((char *)mod->base + (p->p_vaddr - mod->min_addr));
+      grub_addr_t to = from + p->p_memsz;
+
+      err = grub_update_mem_attrs (ALIGN_DOWN(from, DL_ALIGN),
+				   ALIGN_UP(to, DL_ALIGN) - ALIGN_DOWN(from, DL_ALIGN),
 				   set_attrs, clear_attrs);
       if (err != GRUB_ERR_NONE)
 	return err;
