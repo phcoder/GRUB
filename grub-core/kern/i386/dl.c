@@ -41,7 +41,7 @@ grub_arch_dl_check_header (void *ehdr)
 /* Relocate symbols.  */
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+			       Elf_Shdr *s)
 {
   Elf_Rel *rel, *max;
 
@@ -53,16 +53,22 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       Elf_Word *addr;
       Elf_Sym *sym;
 
-      if (seg->size < rel->r_offset)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %x not in [%x..%x]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
-      addr = (Elf_Word *) ((char *) seg->addr + rel->r_offset);
+      addr = (Elf_Word *) ((char *) mod->base + rel->r_offset - mod->min_addr);
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
+	case R_386_JMP_SLOT:
+	  *addr = sym->st_value;
+	  break;
+
+	case R_386_GLOB_DAT:
 	case R_386_32:
 	  *addr += sym->st_value;
 	  break;
@@ -70,6 +76,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	case R_386_PC32:
 	  *addr += (sym->st_value - (grub_addr_t) addr);
 	  break;
+
+	case R_386_RELATIVE:
+	  *addr += (grub_addr_t) mod->base - mod->min_addr;
+	  break;
+
 	default:
 	  return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
 			     N_("relocation 0x%x is not implemented yet"),

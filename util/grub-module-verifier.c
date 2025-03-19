@@ -10,11 +10,15 @@ struct grub_module_verifier_arch archs[] = {
   { "i386", 4, 0, EM_386, GRUB_MODULE_VERIFY_SUPPORTS_REL, (int[]){
       R_386_32,
       R_386_PC32,
+      R_386_RELATIVE,
+      R_386_JMP_SLOT,
+      R_386_GLOB_DAT,
       -1
     } },
   { "x86_64", 8, 0, EM_X86_64, GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
       R_X86_64_64,
       R_X86_64_PC64,
+      R_X86_64_RELATIVE,
       /* R_X86_64_32, R_X86_64_32S are supported but shouldn't be used because of their limited range.  */
       -1
     }, (int[]){
