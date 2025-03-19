@@ -1211,6 +1211,10 @@ else
   TARGET_IMG_CFLAGS=
 fi
 
+if test x${platform} = xefi; then
+  TARGET_LDFLAGS_OLDMAGIC=
+fi
+
 CFLAGS="$TARGET_CFLAGS"
 
 AC_ARG_ENABLE([efiemu],
