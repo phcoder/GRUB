@@ -787,10 +787,6 @@ if test "x$target_cpu" = xi386 && test "x$platform" != xemu; then
   TARGET_CFLAGS="$TARGET_CFLAGS -march=i386"
 fi
 
-if test "x$grub_cv_cc_target_clang" = xno && test "x$target_cpu" = xi386 && test "x$platform" != xemu && test "x$platform" != xefi; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -mrtd -mregparm=3"
-fi
-
 # on mips redirect cache flushing function to non-existant one.
 if test "x$target_cpu" = xmips || test "x$target_cpu" = xmipsel ; then
   AC_CACHE_CHECK([whether -mflush-func=grub_red_herring works], [grub_cv_cc_mflush_func], [
