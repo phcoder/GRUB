@@ -10,6 +10,7 @@ struct grub_module_verifier_arch archs[] = {
   { "i386", 4, 0, EM_386, GRUB_MODULE_VERIFY_SUPPORTS_REL, (int[]){
       R_386_32,
       R_386_PC32,
+      R_386_RELATIVE,
       -1
     } },
   { "x86_64", 8, 0, EM_X86_64, GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){

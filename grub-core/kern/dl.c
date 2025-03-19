@@ -187,19 +187,6 @@ grub_dl_unregister_symbols (grub_dl_t mod)
     }
 }
 
-/* Return the address of a section whose index is N.  */
-static void *
-grub_dl_get_section_addr (grub_dl_t mod, unsigned n)
-{
-  grub_dl_segment_t seg;
-
-  for (seg = mod->segment; seg; seg = seg->next)
-    if (seg->section == n)
-      return seg->addr;
-
-  return 0;
-}
-
 /* Check if EHDR is a valid ELF header.  */
 static grub_err_t
 grub_dl_check_header (void *ehdr, grub_size_t size)
@@ -232,35 +219,31 @@ static grub_err_t
 grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
 {
   unsigned i;
-  const Elf_Shdr *s;
-  grub_size_t tsize = 0, talign = 1, arch_addralign = 1;
+  const Elf_Phdr *p;
+  grub_size_t talign = DL_ALIGN;
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
   !defined (__loongarch__)
   grub_size_t tramp;
   grub_size_t tramp_align;
   grub_size_t got;
   grub_size_t got_align;
+  grub_addr_t tramp_addr = 0;
+  grub_addr_t got_addr = 0;
   grub_err_t err;
 #endif
-  char *ptr;
+  grub_addr_t min_addr = ~(grub_addr_t)0;
+  grub_addr_t max_addr = 0;
 
-  arch_addralign = DL_ALIGN;
-
-  for (i = 0, s = (const Elf_Shdr *)((const char *) e + e->e_shoff);
-       i < e->e_shnum;
-       i++, s = (const Elf_Shdr *)((const char *) s + e->e_shentsize))
+  for (i = 0, p = (const Elf_Phdr *)((const char *) e + e->e_phoff);
+       i < e->e_phnum;
+       i++, p = (const Elf_Phdr *)((const char *) p + e->e_phentsize))
     {
-      grub_size_t sh_addralign;
-      grub_size_t sh_size;
-
-      if (s->sh_size == 0 || !(s->sh_flags & SHF_ALLOC))
+      if (p->p_type != PT_LOAD)
 	continue;
 
-      sh_addralign = ALIGN_UP (s->sh_addralign, arch_addralign);
-      sh_size = ALIGN_UP (s->sh_size, sh_addralign);
-
-      tsize = ALIGN_UP (tsize, sh_addralign) + sh_size;
-      talign = grub_max (talign, sh_addralign);
+      min_addr = grub_min(min_addr, p->p_vaddr);
+      max_addr = grub_max(max_addr, p->p_vaddr + p->p_memsz);
+      talign = grub_max (talign, p->p_align);
     }
 
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
@@ -269,78 +252,42 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
   if (err)
     return err;
   tramp_align = grub_max (GRUB_ARCH_DL_TRAMP_ALIGN, arch_addralign);
-  tsize += ALIGN_UP (tramp, tramp_align);
+  tramp_addr = ALIGN_UP (max_addr, tramp_align);
+  max_addr = ALIGN_UP (tramp_addr+tramp, tramp_align);
   talign = grub_max (talign, tramp_align);
   got_align = grub_max (GRUB_ARCH_DL_GOT_ALIGN, arch_addralign);
-  tsize += ALIGN_UP (got, got_align);
+  got_addr = ALIGN_UP(max_addr, got_align);
+  max_addr = ALIGN_UP(got_addr + got, got_align);
   talign = grub_max (talign, got_align);
 #endif
 
+  min_addr = ALIGN_DOWN(min_addr, talign);
+
 #ifdef GRUB_MACHINE_EMU
-  mod->base = grub_osdep_dl_memalign (talign, tsize);
+  mod->base = grub_osdep_dl_memalign (talign, max_addr - min_addr);
 #else
-  mod->base = grub_memalign (talign, tsize);
+  mod->base = grub_memalign (talign, max_addr - min_addr);
 #endif
   if (!mod->base)
     return grub_errno;
-  mod->sz = tsize;
-  ptr = mod->base;
+  mod->sz = max_addr - min_addr;
+  mod->min_addr = min_addr;
 
-  for (i = 0, s = (Elf_Shdr *)((char *) e + e->e_shoff);
-       i < e->e_shnum;
-       i++, s = (Elf_Shdr *)((char *) s + e->e_shentsize))
+  for (i = 0, p = (const Elf_Phdr *)((const char *) e + e->e_phoff);
+       i < e->e_phnum;
+       i++, p = (const Elf_Phdr *)((const char *) p + e->e_phentsize))
     {
-      grub_size_t sh_addralign = ALIGN_UP (s->sh_addralign, arch_addralign);
-      grub_size_t sh_size = ALIGN_UP (s->sh_size, sh_addralign);
+      if (p->p_type != PT_LOAD)
+	continue;
 
-      if (s->sh_flags & SHF_ALLOC)
-	{
-	  grub_dl_segment_t seg;
-
-	  seg = (grub_dl_segment_t) grub_malloc (sizeof (*seg));
-	  if (! seg)
-	    return grub_errno;
-
-	  if (s->sh_size)
-	    {
-	      void *addr;
-
-	      ptr = (char *) ALIGN_UP ((grub_addr_t) ptr, sh_addralign);
-	      addr = ptr;
-	      ptr += sh_size;
-
-	      switch (s->sh_type)
-		{
-		case SHT_PROGBITS:
-		  grub_memcpy (addr, (char *) e + s->sh_offset, s->sh_size);
-		  grub_memset ((char *) addr + s->sh_size, 0, sh_size - s->sh_size);
-		  break;
-		case SHT_NOBITS:
-		  grub_memset (addr, 0, sh_size);
-		  break;
-		}
-
-	      seg->addr = addr;
-	    }
-	  else
-	    seg->addr = 0;
-
-	  seg->size = sh_size;
-	  seg->section = i;
-	  seg->next = mod->segment;
-	  mod->segment = seg;
-	}
+      void *addr = (char *)mod->base + (p->p_vaddr - mod->min_addr);
+      grub_memcpy (addr, (char *) e + p->p_offset, p->p_filesz);
+      grub_memset ((char *) addr + p->p_filesz, 0, p->p_memsz - p->p_filesz);
     }
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
   !defined (__loongarch__)
-  ptr = (char *) ALIGN_UP ((grub_addr_t) ptr, tramp_align);
-  mod->tramp = ptr;
-  mod->trampptr = ptr;
-  ptr += tramp;
-  ptr = (char *) ALIGN_UP ((grub_addr_t) ptr, got_align);
-  mod->got = ptr;
-  mod->gotptr = ptr;
-  ptr += got;
+  mod->trampptr = mod->tramp = (char *) (mod->base + tramp_addr - mod->min_addr);
+  mod->gotptr = mod->got = (char *) (mod->base + got_addr - mod->min_addr);
 #endif
 
   return GRUB_ERR_NONE;
@@ -358,7 +305,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
   for (i = 0, s = (Elf_Shdr *) ((char *) e + e->e_shoff);
        i < e->e_shnum;
        i++, s = (Elf_Shdr *) ((char *) s + e->e_shentsize))
-    if (s->sh_type == SHT_SYMTAB)
+    if (s->sh_type == SHT_DYNSYM)
       break;
 
   /* Module without symbol table may still be used to pull in dependencies.
@@ -395,6 +342,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	{
 	case STT_NOTYPE:
 	case STT_OBJECT:
+	  
 	  /* Resolve a global symbol.  */
 	  if (sym->st_name != 0 && sym->st_shndx == 0)
 	    {
@@ -408,8 +356,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	    }
 	  else
 	    {
-	      sym->st_value += (Elf_Addr) grub_dl_get_section_addr (mod,
-								    sym->st_shndx);
+	      sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
 	      if (bind != STB_LOCAL)
 		if (grub_dl_register_symbol (name, (void *) sym->st_value, 0, mod))
 		  return grub_errno;
@@ -417,8 +364,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	  break;
 
 	case STT_FUNC:
-	  sym->st_value += (Elf_Addr) grub_dl_get_section_addr (mod,
-								sym->st_shndx);
+	  sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
 #ifdef __ia64__
 	  {
 	      /* FIXME: free descriptor once it's not used anymore. */
@@ -438,11 +384,6 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	    mod->init = (void (*) (grub_dl_t)) sym->st_value;
 	  else if (grub_strcmp (name, "grub_mod_fini") == 0)
 	    mod->fini = (void (*) (void)) sym->st_value;
-	  break;
-
-	case STT_SECTION:
-	  sym->st_value = (Elf_Addr) grub_dl_get_section_addr (mod,
-							       sym->st_shndx);
 	  break;
 
 	case STT_FILE:
@@ -620,26 +561,17 @@ grub_dl_relocate_symbols (grub_dl_t mod, void *ehdr)
        i++, s = (Elf_Shdr *) ((char *) s + e->e_shentsize))
     if (s->sh_type == SHT_REL || s->sh_type == SHT_RELA)
       {
-	grub_dl_segment_t seg;
 	grub_err_t err;
 
 	if (!(s->sh_flags & SHF_INFO_LINK))
 	  continue;
 
-	/* Find the target segment.  */
-	for (seg = mod->segment; seg; seg = seg->next)
-	  if (seg->section == s->sh_info)
-	    break;
+	if (!mod->symtab)
+	  return grub_error (GRUB_ERR_BAD_MODULE, "relocation without symbol table");
 
-	if (seg)
-	  {
-	    if (!mod->symtab)
-	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation without symbol table");
-
-	    err = grub_arch_dl_relocate_symbols (mod, ehdr, s, seg);
-	    if (err)
-	      return err;
-	  }
+	err = grub_arch_dl_relocate_symbols (mod, ehdr, s);
+	if (err)
+	  return err;
       }
 
   return GRUB_ERR_NONE;
@@ -651,7 +583,7 @@ static grub_err_t
 grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
 {
   unsigned i;
-  const Elf_Shdr *s;
+  const Elf_Phdr *p;
   const Elf_Ehdr *e = ehdr;
   grub_err_t err;
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
@@ -661,39 +593,26 @@ grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
   grub_size_t tgsz;
 #endif
 
-  for (i = 0, s = (const Elf_Shdr *) ((const char *) e + e->e_shoff);
-       i < e->e_shnum;
-       i++, s = (const Elf_Shdr *) ((const char *) s + e->e_shentsize))
+  for (i = 0, p = (const Elf_Phdr *) ((const char *) e + e->e_phoff);
+       i < e->e_phnum;
+       i++, p = (const Elf_Phdr *) ((const char *) p + e->e_phentsize))
     {
-      grub_dl_segment_t seg;
       grub_uint64_t set_attrs = GRUB_MEM_ATTR_R;
       grub_uint64_t clear_attrs = GRUB_MEM_ATTR_W | GRUB_MEM_ATTR_X;
 
-      for (seg = mod->segment; seg; seg = seg->next)
-	/* Does this ELF section's index match GRUB DL segment? */
-	if (seg->section == i)
-	  break;
-
-      /* No GRUB DL segment found for this ELF section, skip it. */
-      if (!seg)
-	continue;
-
-      if (seg->size == 0 || !(s->sh_flags & SHF_ALLOC))
-	continue;
-
-      if (s->sh_flags & SHF_WRITE)
+      if (s->p_flags & PF_W)
 	{
 	  set_attrs |= GRUB_MEM_ATTR_W;
 	  clear_attrs &= ~GRUB_MEM_ATTR_W;
 	}
 
-      if (s->sh_flags & SHF_EXECINSTR)
+      if (s->p_flags & PF_X)
 	{
 	  set_attrs |= GRUB_MEM_ATTR_X;
 	  clear_attrs &= ~GRUB_MEM_ATTR_X;
 	}
 
-      err = grub_update_mem_attrs ((grub_addr_t) seg->addr, seg->size,
+      err = grub_update_mem_attrs ((grub_addr_t) (mod->base + p->p_vaddr - mod->min_addr), p->p_memsz,
 				   set_attrs, clear_attrs);
       if (err != GRUB_ERR_NONE)
 	return err;
@@ -746,16 +665,16 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
   if (grub_dl_check_header (e, size))
     return 0;
 
-  if (e->e_type != ET_REL)
+  if (e->e_type != ET_REL && 0)
     {
       grub_error (GRUB_ERR_BAD_MODULE, N_("this ELF file is not of the right type"));
       return 0;
     }
 
   /* Make sure that every section is within the core.  */
-  if (size < e->e_shoff + (grub_uint32_t) e->e_shentsize * e->e_shnum)
+  if (size < e->e_phoff + (grub_uint32_t) e->e_phentsize * e->e_phnum)
     {
-      grub_error (GRUB_ERR_BAD_OS, "ELF sections outside core");
+      grub_error (GRUB_ERR_BAD_OS, "ELF program headers outside core");
       return 0;
     }
 
