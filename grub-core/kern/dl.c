@@ -347,6 +347,8 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	  if (sym->st_name != 0 && sym->st_shndx == 0)
 	    {
 	      grub_symbol_t nsym = grub_dl_resolve_symbol (name);
+	      if (! nsym && bind == STB_WEAK)
+		break;
 	      if (! nsym)
 		return grub_error (GRUB_ERR_BAD_MODULE,
 				   N_("symbol `%s' not found"), name);
@@ -562,9 +564,6 @@ grub_dl_relocate_symbols (grub_dl_t mod, void *ehdr)
     if (s->sh_type == SHT_REL || s->sh_type == SHT_RELA)
       {
 	grub_err_t err;
-
-	if (!(s->sh_flags & SHF_INFO_LINK))
-	  continue;
 
 	if (!mod->symtab)
 	  return grub_error (GRUB_ERR_BAD_MODULE, "relocation without symbol table");

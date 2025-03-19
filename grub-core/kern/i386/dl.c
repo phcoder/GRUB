@@ -64,6 +64,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
+	case R_386_JMP_SLOT:
+	  *addr = sym->st_value;
+	  break;
+
+	case R_386_GLOB_DAT:
 	case R_386_32:
 	  *addr += sym->st_value;
 	  break;

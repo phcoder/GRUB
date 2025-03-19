@@ -65,7 +65,7 @@ if test x@TARGET_APPLE_LINKER@ != x1; then
 		-R .rel.gnu.build.attributes \
 		-R .rela.gnu.build.attributes \
 		-R .eh_frame -R .rela.eh_frame -R .rel.eh_frame \
-		-R .note -R .comment -R .ARM.exidx $tmpfile || exit 1
+		-R .note -R .comment -R .gnu.hash -R .dynamic -R .ARM.exidx -R .symtab -R .strtab -R .shstrtab -s $tmpfile || exit 1
 	fi
 	if ! test -z "${TARGET_OBJ2ELF}"; then
 	    "${TARGET_OBJ2ELF}" $tmpfile || exit 1
