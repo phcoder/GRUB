@@ -599,19 +599,19 @@ grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
       grub_uint64_t set_attrs = GRUB_MEM_ATTR_R;
       grub_uint64_t clear_attrs = GRUB_MEM_ATTR_W | GRUB_MEM_ATTR_X;
 
-      if (s->p_flags & PF_W)
+      if (p->p_flags & PF_W)
 	{
 	  set_attrs |= GRUB_MEM_ATTR_W;
 	  clear_attrs &= ~GRUB_MEM_ATTR_W;
 	}
 
-      if (s->p_flags & PF_X)
+      if (p->p_flags & PF_X)
 	{
 	  set_attrs |= GRUB_MEM_ATTR_X;
 	  clear_attrs &= ~GRUB_MEM_ATTR_X;
 	}
 
-      err = grub_update_mem_attrs ((grub_addr_t) (mod->base + p->p_vaddr - mod->min_addr), p->p_memsz,
+      err = grub_update_mem_attrs ((grub_addr_t) ((char *)mod->base + (p->p_vaddr - mod->min_addr)), p->p_memsz,
 				   set_attrs, clear_attrs);
       if (err != GRUB_ERR_NONE)
 	return err;
