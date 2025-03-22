@@ -36,6 +36,11 @@ memcmp (const void *s1, const void *s2, grub_size_t n)
 {
   return grub_memcmp (s1, s2, n);
 }
+int GRUB_BUILTIN_ATTR
+bcmp (const void *s1, const void *s2, grub_size_t n)
+{
+  return grub_memcmp (s1, s2, n);
+}
 void * GRUB_BUILTIN_ATTR
 memset (void *s, int c, grub_size_t n)
 {
