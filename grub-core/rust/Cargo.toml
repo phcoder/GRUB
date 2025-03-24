@@ -1,0 +1,19 @@
+[workspace]
+members = ["grub_rust_core", "grub_rust_example"]
+resolver = "3"
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
+panic="abort"
+opt-level = "z"  # Optimize for size.
+
+[profile.dev]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
+panic="abort"
+
+[workspace.dependencies]
+grub = { path = "grub_rust_core" }

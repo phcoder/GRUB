@@ -144,6 +144,7 @@ widthspec.bin
 /grub-core/lib/libtasn1-grub
 /grub-core/modinfo.sh
 /grub-core/rs_decoder.h
+/grub-core/rust/Cargo.lock
 /grub-core/symlist.c
 /grub-core/symlist.h
 /grub-core/tests/asn1/tests
