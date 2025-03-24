@@ -746,6 +746,15 @@ int main (void);
   TARGET_CCASFLAGS="$TARGET_CCASFLAGS $grub_cv_target_cc_mips_o32_abi"
 fi
 
+case "x$target_cpu-$platform" in
+     xi386-*)
+       TARGET_RUST_TARGET=i586-unknown-linux-gnu
+	;;
+     *)
+        AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
+	;;
+esac
+
 AC_CACHE_CHECK([for options to compile assembly], [grub_cv_cc_target_asm_compile], [
 test_program=
 case "x$target_cpu-$platform" in
@@ -2142,6 +2151,7 @@ AC_SUBST(TARGET_CFLAGS)
 AC_SUBST(TARGET_LDFLAGS)
 AC_SUBST(TARGET_CPPFLAGS)
 AC_SUBST(TARGET_CCASFLAGS)
+AC_SUBST(TARGET_RUST_TARGET)
 
 AC_SUBST(TARGET_IMG_LDFLAGS)
 AC_SUBST(TARGET_IMG_CFLAGS)

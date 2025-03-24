@@ -16,6 +16,7 @@ AM_CFLAGS = $(TARGET_CFLAGS)
 AM_LDFLAGS = $(TARGET_LDFLAGS)
 AM_CPPFLAGS = $(TARGET_CPPFLAGS) $(CPPFLAGS_DEFAULT)
 AM_CCASFLAGS = $(TARGET_CCASFLAGS) $(CCASFLAGS_DEFAULT)
+RUST_TARGET = $(TARGET_RUST_TARGET)
 
 CFLAGS_PROGRAM += $(CFLAGS_PLATFORM)
 LDFLAGS_PROGRAM += $(LDFLAGS_PLATFORM)
@@ -520,3 +521,9 @@ windowsdir: $(PROGRAMS) $(starfield_DATA) $(platform_DATA)
 	for x in $(platform_DATA); do \
 		cp -fp $$x $(windowsdir)/$(target_cpu)-$(platform)/$$x; \
 	done
+
+
+.PHONY: rust
+
+rust:
+	(cd $(srcdir)/rust; cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)
