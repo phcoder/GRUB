@@ -54,7 +54,7 @@ grub_arch_dl_check_header (void *ehdr)
 /* Relocate symbols. */
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+			       Elf_Shdr *s)
 {
   Elf_Rel *rel, *max;
 
@@ -67,9 +67,10 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       void *place;
       grub_size_t sym_addr;
 
-      if (rel->r_offset >= seg->size)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
@@ -78,7 +79,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       if (s->sh_type == SHT_RELA)
 	sym_addr += ((Elf_Rela *) rel)->r_addend;
 
-      place = (void *) ((grub_addr_t) seg->addr + rel->r_offset);
+      place = (void *) ((char *) mod->base + rel->r_offset - mod->min_addr);
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
@@ -270,7 +271,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
 		rel2_offset = rel2->r_offset;
 		rel2_info = rel2->r_info;
-		rel2_loc = (grub_addr_t) seg->addr + rel2_offset;
+		rel2_loc = (Elf_Addr) ((char *) mod->base + rel2_offset - mod->min_addr);
 
 		if (ELF_R_TYPE (rel2_info) == R_RISCV_PCREL_HI20
 		    && rel2_loc == sym_addr)
@@ -330,6 +331,15 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
 	case R_RISCV_RELAX:
 	  break;
+
+	case R_RISCV_JUMP_SLOT:
+	  *(grub_size_t *)place += sym_addr;
+	  break;
+
+	case R_RISCV_RELATIVE:
+	  *(grub_size_t *)place += (grub_addr_t) mod->base - mod->min_addr;
+	  break;
+
 	default:
 	  {
 	    char rel_info[17]; /* log16(2^64) = 16, plus NUL. */

@@ -183,6 +183,8 @@ struct grub_module_verifier_arch archs[] = {
       R_RISCV_RELAX,
       R_RISCV_RVC_BRANCH,
       R_RISCV_RVC_JUMP,
+      R_RISCV_RELATIVE,
+      R_RISCV_JUMP_SLOT,
       -1
     } },
   { "riscv64", 8, 0, EM_RISCV, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
@@ -211,6 +213,8 @@ struct grub_module_verifier_arch archs[] = {
       R_RISCV_RELAX,
       R_RISCV_RVC_BRANCH,
       R_RISCV_RVC_JUMP,
+      R_RISCV_RELATIVE,
+      R_RISCV_JUMP_SLOT,
       -1
     }
   },
