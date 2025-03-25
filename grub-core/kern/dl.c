@@ -251,11 +251,11 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
   err = grub_arch_dl_get_tramp_got_size (e, &tramp, &got);
   if (err)
     return err;
-  tramp_align = grub_max (GRUB_ARCH_DL_TRAMP_ALIGN, arch_addralign);
+  tramp_align = grub_max (GRUB_ARCH_DL_TRAMP_ALIGN, DL_ALIGN);
   tramp_addr = ALIGN_UP (max_addr, tramp_align);
   max_addr = ALIGN_UP (tramp_addr+tramp, tramp_align);
   talign = grub_max (talign, tramp_align);
-  got_align = grub_max (GRUB_ARCH_DL_GOT_ALIGN, arch_addralign);
+  got_align = grub_max (GRUB_ARCH_DL_GOT_ALIGN, DL_ALIGN);
   got_addr = ALIGN_UP(max_addr, got_align);
   max_addr = ALIGN_UP(got_addr + got, got_align);
   talign = grub_max (talign, got_align);
@@ -286,8 +286,8 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
     }
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
   !defined (__loongarch__)
-  mod->trampptr = mod->tramp = (char *) (mod->base + tramp_addr - mod->min_addr);
-  mod->gotptr = mod->got = (char *) (mod->base + got_addr - mod->min_addr);
+  mod->trampptr = mod->tramp = (char *) mod->base + (tramp_addr - mod->min_addr);
+  mod->gotptr = mod->got = (char *) mod->base + (got_addr - mod->min_addr);
 #endif
 
   return GRUB_ERR_NONE;
