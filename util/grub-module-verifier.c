@@ -19,6 +19,7 @@ struct grub_module_verifier_arch archs[] = {
       R_X86_64_64,
       R_X86_64_PC64,
       R_X86_64_RELATIVE,
+      R_X86_64_GLOB_DAT,
       /* R_X86_64_32, R_X86_64_32S are supported but shouldn't be used because of their limited range.  */
       -1
     }, (int[]){

@@ -748,7 +748,12 @@ fi
 
 case "x$target_cpu-$platform" in
      xi386-*)
+       # no i586-unknown-none target. Use closest match
        TARGET_RUST_TARGET=i586-unknown-linux-gnu
+	;;
+     xx86_64-*)
+       # no i586-unknown-none target. Use closest match
+       TARGET_RUST_TARGET=x86_64-unknown-none
 	;;
      *)
         AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
