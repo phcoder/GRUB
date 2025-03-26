@@ -70,7 +70,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
 			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
-			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
+			   (unsigned long) rel->r_offset, (unsigned long) mod->min_addr,
+			   (unsigned long) mod->min_addr + mod->sz);
 
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
