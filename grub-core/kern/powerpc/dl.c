@@ -156,7 +156,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	  break;
 
 	case GRUB_ELF_R_PPC_RELATIVE:
-	  *addr += (grub_addr_t) mod->base - mod->min_addr;
+	  *addr += (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
 	  break;
 
 	case GRUB_ELF_R_PPC_REL32:
