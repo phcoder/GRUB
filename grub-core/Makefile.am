@@ -526,4 +526,4 @@ windowsdir: $(PROGRAMS) $(starfield_DATA) $(platform_DATA)
 .PHONY: rust
 
 rust:
-	(cd $(srcdir)/rust; cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)
+	(cd $(srcdir)/rust; RUSTFLAGS="-C linker=$(TARGET_CC) -C link-args=-nostdlib" cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)
