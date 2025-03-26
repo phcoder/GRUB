@@ -96,8 +96,7 @@ grub_arch_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 
 /* Relocate symbols.  */
 grub_err_t
-grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   grub_uint32_t gp0;
   Elf_Ehdr *e = ehdr;
@@ -130,11 +129,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       Elf_Sym *sym;
       grub_uint32_t sym_value;
 
-      if (seg->size < rel->r_offset)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
-
-      addr = (grub_uint8_t *) ((char *) seg->addr + rel->r_offset);
+			   "reloc offset is out of the segment: %x not in [%x..%x]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
+      addr = (void *) ((char *) mod->base + rel->r_offset - mod->min_addr);
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
       sym_value = sym->st_value;
@@ -174,7 +173,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 		  && ELF_R_TYPE (rel2->r_info) == R_MIPS_LO16)
 		{
 		  value += *(grub_int16_t *)
-		    ((char *) seg->addr + rel2->r_offset
+		    (((char *) mod->base + rel2->r_offset - mod->min_addr)
 #ifdef GRUB_CPU_WORDS_BIGENDIAN
 		     + 2
 #endif
@@ -226,7 +225,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 		    && ELF_R_TYPE (rel2->r_info) == R_MIPS_LO16)
 		  {
 		    sym_value += *(grub_int16_t *)
-		      ((char *) seg->addr + rel2->r_offset
+		      (((char *) mod->base + rel2->r_offset - mod->min_addr)
 #ifdef GRUB_CPU_WORDS_BIGENDIAN
 		       + 2
 #endif
