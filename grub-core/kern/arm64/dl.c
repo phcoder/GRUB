@@ -83,6 +83,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
       switch (ELF_R_TYPE (rel->r_info))
 	{
 	case R_AARCH64_ABS64:
+	case R_AARCH64_JUMP_SLOT:
+	case R_AARCH64_GLOB_DAT:
 	  {
 	    grub_uint64_t *abs_place = place;
 
@@ -180,6 +182,10 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 
 	    grub_arm64_set_hi21 (place, offset);
 	  }
+	  break;
+
+	case R_AARCH64_RELATIVE:
+	  *(grub_uint64_t *)place += (grub_addr_t) mod->base - mod->min_addr;
 	  break;
 
 	default:
