@@ -186,6 +186,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 
 	case R_AARCH64_RELATIVE:
 	  *(grub_uint64_t *)place += (grub_addr_t) mod->base - mod->min_addr;
+	  if (s->sh_type == SHT_RELA)
+	    *(grub_uint64_t *)place += ((Elf_Rela *) rel)->r_addend;
 	  break;
 
 	default:

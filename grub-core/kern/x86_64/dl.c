@@ -72,7 +72,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	  break;
 
 	case R_X86_64_RELATIVE:
-	  *addr64 += (grub_addr_t) mod->base - mod->min_addr;
+	  *addr64 += (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
 	  break;
 
 	case R_X86_64_PC32:
