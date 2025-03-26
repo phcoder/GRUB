@@ -97,8 +97,7 @@ grub_arch_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 
 /* Relocate symbols.  */
 grub_err_t
-grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   Elf_Rela *rel, *max;
 
@@ -111,11 +110,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       Elf_Sym *sym;
       Elf_Addr value;
 
-      if (seg->size < rel->r_offset)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
-      addr = (Elf_Word *) ((char *) seg->addr + rel->r_offset);
+      addr = (Elf_Word *) ((char *) mod->base + rel->r_offset - mod->min_addr);
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
 
