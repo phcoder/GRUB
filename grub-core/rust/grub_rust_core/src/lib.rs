@@ -93,6 +93,10 @@ pub extern "C" fn strlen(s: *const c_char) -> usize {
     return unsafe { grub_strlen(s) }; 
 }
 
+#[unsafe(no_mangle)]
+#[cfg(target_arch = "arm")]
+pub extern "C" fn __aeabi_unwind_cpp_pr0() {
+}
 
 // TODO: Use code generation?
 #[repr(C)]
