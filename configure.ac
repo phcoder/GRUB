@@ -762,7 +762,7 @@ case "x$target_cpu-$platform" in
      xriscv64-*)
 	TARGET_RUST_TARGET=riscv64gc-unknown-linux-gnu
 	;;
-     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xmipsel-*)
+     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xmipsel-* | xloongarch64-*)
         TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
         ;;
      *)
