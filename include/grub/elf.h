@@ -2540,6 +2540,8 @@ typedef Elf32_Addr Elf32_Conflict;
 /* LoongArch relocations */
 #define R_LARCH_NONE			      0
 #define R_LARCH_64			      2
+#define R_LARCH_RELATIVE		      3
+#define R_LARCH_JUMP_SLOT		      5
 #define R_LARCH_MARK_LA			      20
 #define R_LARCH_SOP_PUSH_PCREL		      22
 #define R_LARCH_SOP_PUSH_ABSOLUTE	      23
