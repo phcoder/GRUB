@@ -728,7 +728,7 @@ def rust_module(defn, platform):
 #    gvar_add("MARKER_FILES", name + ".marker")
     gvar_add("CLEANFILES", name + ".marker")
 
-    output(f"\n{rust_lib}: rust\n")
+    output(f"\n{rust_lib}: rust-compile\n")
     output(f"\n{grub_module}: {rust_lib}\n	cp $< $@\n")
 
 
