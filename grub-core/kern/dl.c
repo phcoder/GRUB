@@ -337,12 +337,13 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
       unsigned char type = ELF_ST_TYPE (sym->st_info);
       unsigned char bind = ELF_ST_BIND (sym->st_info);
       const char *name = str + sym->st_name;
+      int isfunc = type == STT_FUNC;
 
       switch (type)
 	{
 	case STT_NOTYPE:
 	case STT_OBJECT:
-	  
+	case STT_FUNC:
 	  /* Resolve a global symbol.  */
 	  if (sym->st_name != 0 && sym->st_shndx == 0)
 	    {
@@ -359,37 +360,31 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	  else
 	    {
 	      sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
+#ifdef __ia64__
+	      if (isfunc)
+		{
+		  /* FIXME: free descriptor once it's not used anymore. */
+		  char **desc;
+		  desc = grub_malloc (2 * sizeof (char *));
+		  if (!desc)
+		    return grub_errno;
+		  desc[0] = (void *) sym->st_value;
+		  desc[1] = mod->base;
+		  sym->st_value = (grub_addr_t) desc;
+		}
+#endif
 	      if (bind != STB_LOCAL)
-		if (grub_dl_register_symbol (name, (void *) sym->st_value, 0, mod))
+		if (grub_dl_register_symbol (name, (void *) sym->st_value, isfunc, mod))
 		  return grub_errno;
+	      if (isfunc && grub_strcmp (name, "grub_mod_init") == 0)
+		mod->init = (void (*) (grub_dl_t)) sym->st_value;
+	      else if (isfunc && grub_strcmp (name, "grub_mod_fini") == 0)
+		mod->fini = (void (*) (void)) sym->st_value;
 	    }
 	  break;
 
 	case STT_SECTION:
 	  sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
-	  break;
-
-	case STT_FUNC:
-	  sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
-#ifdef __ia64__
-	  {
-	      /* FIXME: free descriptor once it's not used anymore. */
-	      char **desc;
-	      desc = grub_malloc (2 * sizeof (char *));
-	      if (!desc)
-		return grub_errno;
-	      desc[0] = (void *) sym->st_value;
-	      desc[1] = mod->base;
-	      sym->st_value = (grub_addr_t) desc;
-	  }
-#endif
-	  if (bind != STB_LOCAL)
-	    if (grub_dl_register_symbol (name, (void *) sym->st_value, 1, mod))
-	      return grub_errno;
-	  if (grub_strcmp (name, "grub_mod_init") == 0)
-	    mod->init = (void (*) (grub_dl_t)) sym->st_value;
-	  else if (grub_strcmp (name, "grub_mod_fini") == 0)
-	    mod->fini = (void (*) (void)) sym->st_value;
 	  break;
 
 	case STT_FILE:
