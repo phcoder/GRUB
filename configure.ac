@@ -896,17 +896,6 @@ if ( test "x$target_cpu" = xi386 || test "x$target_cpu" = xx86_64 ); then
 fi
 
 if test "x$target_cpu" = xloongarch64; then
-  AC_CACHE_CHECK([whether _mno_explicit_relocs works], [grub_cv_cc_mno_explicit_relocs], [
-    CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -Werror"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
-	[grub_cv_cc_mno_explicit_relocs=yes],
-	[grub_cv_cc_mno_explicit_relocs=no])
-  ])
-  if test "x$grub_cv_cc_mno_explicit_relocs" = xyes; then
-    TARGET_CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -fno-plt"
-    TARGET_CCASFLAGS="$TARGET_CCASFLAGS -mno-explicit-relocs -fno-plt"
-  fi
-
   AC_CACHE_CHECK([for no-relax options], grub_cv_target_cc_mno_relax, [
     grub_cv_target_cc_mno_relax=no
     for cand in "-mno-relax" "-Wa,-mno-relax"; do
@@ -1426,11 +1415,11 @@ grub_CHECK_PIC
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if ( test x$target_cpu = xarm64 ) && test "x$grub_cv_cc_target_clang" = xyes ; then
+if test x$target_cpu = xarm64 && test "x$grub_cv_cc_target_clang" = xyes ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 elif xtest x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
-elif test x$target_cpu = xriscv32  ; then
+elif test x$target_cpu = xriscv32 || test x$target_cpu = xloongarch64 ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 elif [ x"$pic_possible" = xyes ]; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
