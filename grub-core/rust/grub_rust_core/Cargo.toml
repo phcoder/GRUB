@@ -7,4 +7,4 @@ version = "0.1.0"
 [dependencies]
 
 [lib]
-crate-type = ["staticlib", "lib"]
+crate-type = ["staticlib", "dylib"]

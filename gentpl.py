@@ -716,34 +716,20 @@ def module(defn, platform):
 def rust_module(defn, platform):
     name = defn['name']
     rust_name = defn['rust_name']
-    rust_ext = defn.get('rust_ext', 'rlib')
     set_canonical_name_suffix(".module")
-    rust_lib = f"rust/$(RUST_TARGET)/release/lib{rust_name}.{rust_ext}" 
+    rust_lib = f"rust/$(RUST_TARGET)/release/lib{rust_name}.so"
+    grub_module = name + ".module$(EXEEXT)"
 
-    gvar_add("platform_PROGRAMS", name + ".module")
-    gvar_add("MODULE_FILES", name + ".module$(EXEEXT)")
+    gvar_add("MODULE_FILES", grub_module)
 
-    var_set(cname(defn) + "_SOURCES", platform_sources(defn, platform) + " ## platform sources")
-    var_set("nodist_" + cname(defn) + "_SOURCES", platform_nodist_sources(defn, platform) + " ## platform nodist sources")
-    var_set(cname(defn) + "_LDADD", f"{rust_lib} " + platform_ldadd(defn, platform))
-    var_set(cname(defn) + "_CFLAGS", "$(AM_CFLAGS) $(CFLAGS_MODULE) " + platform_cflags(defn, platform))
-    var_set(cname(defn) + "_LDFLAGS", "$(AM_LDFLAGS) $(LDFLAGS_MODULE) -Wl,--whole-archive " + platform_ldflags(defn, platform))
-    var_set(cname(defn) + "_CPPFLAGS", "$(AM_CPPFLAGS) $(CPPFLAGS_MODULE) " + platform_cppflags(defn, platform))
-    var_set(cname(defn) + "_CCASFLAGS", "$(AM_CCASFLAGS) $(CCASFLAGS_MODULE) " + platform_ccasflags(defn, platform))
-    var_set(cname(defn) + "_DEPENDENCIES", f"$(TARGET_OBJ2ELF) {rust_lib} rust " + platform_dependencies(defn, platform))
-
-    gvar_add("dist_noinst_DATA", extra_dist(defn))
-    gvar_add("BUILT_SOURCES", "$(nodist_" + cname(defn) + "_SOURCES)")
-    gvar_add("CLEANFILES", "$(nodist_" + cname(defn) + "_SOURCES)")
+    gvar_add("CLEANFILES", grub_module)
 
     gvar_add("MOD_FILES", name + ".mod")
 #    gvar_add("MARKER_FILES", name + ".marker")
     gvar_add("CLEANFILES", name + ".marker")
 
-    for dep in defn.find_all("depends"):
-        gvar_add("EXTRA_DEPS", "depends " + name + " " + dep + ":")
-
     output(f"\n{rust_lib}: rust\n")
+    output(f"\n{grub_module}: {rust_lib}\n	cp $< $@\n")
 
 
 def kernel(defn, platform):

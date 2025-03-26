@@ -748,10 +748,10 @@ fi
 
 case "x$target_cpu-$platform" in
      xarm-*)
-	TARGET_RUST_TARGET=armv5te-none-eabi
+	TARGET_RUST_TARGET=armv5te-unknown-linux-gnueabi
 	;;
      xarm64-*)
-	TARGET_RUST_TARGET=aarch64-unknown-none-softfloat
+	TARGET_RUST_TARGET=aarch64-unknown-linux-gnu
 	;;
      xi386-*)
        # no i586-unknown-none target. Use closest match
@@ -777,7 +777,7 @@ case "x$target_cpu-$platform" in
         TARGET_RUST_TARGET=mips-unknown-linux-gnu
 	;;
      xmipsel-*)
-        TARGET_RUST_TARGET=mipsel-unknown-none
+        TARGET_RUST_TARGET=mipsel-unknown-linux-gnu
         ;;
      *)
         AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
