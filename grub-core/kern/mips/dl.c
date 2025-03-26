@@ -153,6 +153,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	}
       switch (ELF_R_TYPE (rel->r_info))
 	{
+	case R_MIPS_NONE:
+	  break;
 	case R_MIPS_HI16:
 	  {
 	    grub_uint32_t value;
@@ -188,6 +190,9 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	  addr += 2;
 #endif
 	  *(grub_uint16_t *) addr += sym_value & 0xffff;
+	  break;
+	case R_MIPS_REL32:
+	  *(grub_uint32_t *) addr += sym_value - (grub_addr_t)addr;
 	  break;
 	case R_MIPS_32:
 	  *(grub_uint32_t *) addr += sym_value;

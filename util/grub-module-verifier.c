@@ -78,6 +78,8 @@ struct grub_module_verifier_arch archs[] = {
       -1
     } },
   { "mipsel", 4, 0, EM_MIPS, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
+      R_MIPS_NONE,
+      R_MIPS_REL32,
       R_MIPS_HI16,
       R_MIPS_LO16,
       R_MIPS_32,
@@ -89,6 +91,8 @@ struct grub_module_verifier_arch archs[] = {
       -1
     } },
   { "mips", 4, 1, EM_MIPS, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
+      R_MIPS_NONE,
+      R_MIPS_REL32,
       R_MIPS_HI16,
       R_MIPS_LO16,
       R_MIPS_32,
