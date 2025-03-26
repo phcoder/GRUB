@@ -754,30 +754,16 @@ case "x$target_cpu-$platform" in
 	TARGET_RUST_TARGET=aarch64-unknown-linux-gnu
 	;;
      xi386-*)
-       # no i586-unknown-none target. Use closest match
        TARGET_RUST_TARGET=i586-unknown-linux-gnu
-	;;
-     xx86_64-*)
-       # no i586-unknown-none target. Use closest match
-       TARGET_RUST_TARGET=x86_64-unknown-none
-	;;
-     xpowerpc-*)
-	TARGET_RUST_TARGET=powerpc-unknown-linux-gnu
 	;;
      xriscv32-*)
 	TARGET_RUST_TARGET=riscv32gc-unknown-linux-gnu
 	;;
      xriscv64-*)
-	TARGET_RUST_TARGET=riscv64gc-unknown-none-elf
+	TARGET_RUST_TARGET=riscv64gc-unknown-linux-gnu
 	;;
-     xsparc64-*)
-	TARGET_RUST_TARGET=sparc64-unknown-linux-gnu
-	;;
-     xmips-*)
-        TARGET_RUST_TARGET=mips-unknown-linux-gnu
-	;;
-     xmipsel-*)
-        TARGET_RUST_TARGET=mipsel-unknown-linux-gnu
+     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xmipsel-*)
+        TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
         ;;
      *)
         AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
