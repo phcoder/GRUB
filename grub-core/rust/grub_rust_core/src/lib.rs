@@ -98,6 +98,18 @@ pub extern "C" fn strlen(s: *const c_char) -> usize {
 pub extern "C" fn __aeabi_unwind_cpp_pr0() {
 }
 
+#[unsafe(no_mangle)]
+#[cfg(target_arch = "sparc64")]
+pub extern "C" fn _Qp_div() {
+    panic!("Qp div isn't implemented yet");
+}
+
+#[unsafe(no_mangle)]
+#[cfg(target_arch = "sparc64")]
+pub extern "C" fn _Qp_mul() {
+    panic!("Qp div isn't implemented yet");
+}
+
 // TODO: Use code generation?
 #[repr(C)]
 struct GrubCommand {
