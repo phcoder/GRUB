@@ -114,6 +114,9 @@ struct grub_module_verifier_arch archs[] = {
       R_ARM_THM_MOVW_ABS_NC,
       R_ARM_THM_MOVT_ABS,
       R_ARM_THM_JUMP19,
+      R_ARM_RELATIVE,
+      R_ARM_JUMP_SLOT,
+      R_ARM_GLOB_DAT,
       -1
     } },
   { "arm64", 8, 0, EM_AARCH64, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){

@@ -134,6 +134,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
       switch (ELF_R_TYPE (rel->r_info))
 	{
 	case R_ARM_ABS32:
+	case R_ARM_GLOB_DAT:
 	  {
 	    /* Data will be naturally aligned */
 	    retval = grub_arm_reloc_abs32 (target, sym_addr);
@@ -141,6 +142,15 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	      return retval;
 	  }
 	  break;
+
+	case R_ARM_JUMP_SLOT:
+	  *target = sym_addr;
+	  break;
+
+	case R_ARM_RELATIVE:
+	  *target += (grub_addr_t) mod->base - mod->min_addr;
+	  break;
+
 	case R_ARM_CALL:
 	case R_ARM_JUMP24:
 	  {
