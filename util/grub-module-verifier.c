@@ -53,6 +53,9 @@ struct grub_module_verifier_arch archs[] = {
 	 usually. */
       R_SPARC_HI22,
       R_SPARC_32,
+      R_SPARC_RELATIVE,
+      R_SPARC_GLOB_DAT,
+      R_SPARC_JMP_SLOT,
       -1
     } },
   { "ia64", 8, 0, EM_IA_64, GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){

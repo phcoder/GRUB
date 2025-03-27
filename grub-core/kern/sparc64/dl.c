@@ -122,6 +122,9 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
       value = sym->st_value + rel->r_addend;
       switch (ELF_R_TYPE (rel->r_info) & 0xff)
 	{
+	case R_SPARC_RELATIVE:
+	  *(Elf_Xword *) addr += (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
+	  break;
 	case R_SPARC_32: /* 3 V-word32 */
 	  if (value & 0xFFFFFFFF00000000)
 	    return grub_error (GRUB_ERR_BAD_MODULE,
@@ -166,6 +169,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	case R_SPARC_LO10: /* 12 T-simm13 */
 	  *addr = (*addr & 0xFFFFFC00) | (value & 0x3FF);
 	  break;
+	case R_SPARC_JMP_SLOT:
+	case R_SPARC_GLOB_DAT:
 	case R_SPARC_64: /* 32 V-xwords64 */
 	  *(Elf_Xword *) addr = value;
 	  break;
