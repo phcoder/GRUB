@@ -77,8 +77,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
-	case R_LARCH_64:
 	case R_LARCH_JUMP_SLOT:
+	  *(grub_uint64_t *)place = sym_addr;
+	  break;
+
+	case R_LARCH_64:
 	  {
 	    grub_uint64_t *abs_place = place;
 

@@ -334,7 +334,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	  break;
 
 	case R_RISCV_JUMP_SLOT:
-	  *(grub_size_t *)place += sym_addr;
+	  *(grub_size_t *)place = sym_addr;
 	  break;
 
 	case R_RISCV_RELATIVE:
