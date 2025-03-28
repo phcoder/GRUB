@@ -29,6 +29,54 @@
 static char __gnu_local_gp_dummy;
 static char _gp_disp_dummy;
 
+
+void
+grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf32_Dyn *dyn, grub_size_t sz)
+{
+  unsigned i;
+  for (i = 0; i < sz / sizeof(dyn[0]); i++)
+    switch (dyn[i].d_tag)
+      {
+      case DT_PLTGOT:
+	mod->pltgot = dyn[i].d_un.d_ptr;
+	break;
+      case DT_MIPS_GOTSYM:
+	mod->gotsym = dyn[i].d_un.d_val;
+	break;
+      case DT_MIPS_SYMTABNO:
+	mod->symtabno = dyn[i].d_un.d_val;
+	break;
+      case DT_MIPS_LOCAL_GOTNO:
+	mod->local_gotno = dyn[i].d_un.d_val;
+	break;
+      case DT_NULL:
+	return;
+      }
+}
+
+grub_err_t
+grub_arch_dl_relocate_pltgot (grub_dl_t mod)
+{
+  grub_uint32_t i = 0;
+  grub_uint32_t *pltgot = (grub_uint32_t *) (void *) ((char *) mod->base + (mod->pltgot - mod->min_addr));
+
+  for (i = 0; i < mod->local_gotno; i++)
+    {
+      pltgot[i] += (grub_addr_t)mod->base - mod->min_addr;
+      grub_dprintf("dl", "Locating local %p[%x] to %x\n", &pltgot[i], mod->pltgot + (i) * 4, pltgot[i]);
+    }
+  for (i = 0; i < mod->symtabno - mod->gotsym; i++)
+    {
+      Elf_Sym *sym;
+      sym = (Elf_Sym *) (void *) ((char *) mod->symtab
+				  + mod->symsize * (i + mod->gotsym));
+      pltgot[i+mod->local_gotno] = sym->st_value;
+      grub_dprintf("dl", "Locating %p[%x] to %x\n", &pltgot[i+mod->local_gotno], mod->pltgot + (i+mod->local_gotno) * 4, sym->st_value);
+    }
+
+  return GRUB_ERR_NONE;
+}
+
 /* Check if EHDR is a valid ELF header.  */
 grub_err_t
 grub_arch_dl_check_header (void *ehdr)
@@ -129,6 +177,9 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
       Elf_Sym *sym;
       grub_uint32_t sym_value;
 
+      if (ELF_R_TYPE (rel->r_info) == R_MIPS_NONE)
+	continue;
+
       if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
 			   "reloc offset is out of the segment: %x not in [%x..%x]",
@@ -153,8 +204,6 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	}
       switch (ELF_R_TYPE (rel->r_info))
 	{
-	case R_MIPS_NONE:
-	  break;
 	case R_MIPS_HI16:
 	  {
 	    grub_uint32_t value;
@@ -192,7 +241,9 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	  *(grub_uint16_t *) addr += sym_value & 0xffff;
 	  break;
 	case R_MIPS_REL32:
-	  *(grub_uint32_t *) addr += sym_value - (grub_addr_t)addr;
+	  *(grub_uint32_t *) addr += (grub_addr_t) mod->base - mod->min_addr;
+	  if (s->sh_type == SHT_RELA)
+	    *(grub_uint32_t *) addr += ((Elf_Rela *) rel)->r_addend;
 	  break;
 	case R_MIPS_32:
 	  *(grub_uint32_t *) addr += sym_value;

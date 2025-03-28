@@ -277,6 +277,11 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
        i < e->e_phnum;
        i++, p = (const Elf_Phdr *)((const char *) p + e->e_phentsize))
     {
+#ifdef __mips__
+      if (p->p_type == PT_DYNAMIC)
+	grub_arch_dl_parse_dynamic (mod, (Elf32_Dyn *) ((char *) e + p->p_offset), p->p_filesz);
+#endif
+
       if (p->p_type != PT_LOAD)
 	continue;
 
@@ -706,6 +711,9 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
       || grub_dl_load_segments (mod, e)
       || grub_dl_resolve_symbols (mod, e)
       || grub_dl_relocate_symbols (mod, e)
+#ifdef __mips__
+      || grub_arch_dl_relocate_pltgot (mod)
+#endif
       || grub_dl_set_mem_attrs (mod, e))
     {
       mod->fini = 0;
