@@ -717,7 +717,7 @@ def rust_module(defn, platform):
     name = defn['name']
     rust_name = defn['rust_name']
     set_canonical_name_suffix(".module")
-    rust_lib = f"rust/$(RUST_TARGET)/release/lib{rust_name}.so"
+    rust_lib = f"rust/$(RUST_TARGET_SHORT)/release/lib{rust_name}.so"
     grub_module = name + ".module$(EXEEXT)"
 
     gvar_add("MODULE_FILES", grub_module)

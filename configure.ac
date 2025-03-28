@@ -746,6 +746,7 @@ int main (void);
   TARGET_CCASFLAGS="$TARGET_CCASFLAGS $grub_cv_target_cc_mips_o32_abi"
 fi
 
+TARGET_RUST_TARGET_SHORT=
 case "x$target_cpu-$platform" in
      xarm-*)
 	TARGET_RUST_TARGET=armv5te-unknown-linux-gnueabi
@@ -762,13 +763,20 @@ case "x$target_cpu-$platform" in
      xriscv64-*)
 	TARGET_RUST_TARGET=riscv64gc-unknown-linux-gnu
 	;;
-     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xmipsel-* | xloongarch64-*)
+     xmipsel-*)
+     	TARGET_RUST_TARGET=mipsel1.json
+     	TARGET_RUST_TARGET_SHORT=mipsel1
+	;;
+     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xloongarch64-*)
         TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
         ;;
      *)
         AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
 	;;
 esac
+if test "x$TARGET_RUST_TARGET_SHORT" = x ; then
+   TARGET_RUST_TARGET_SHORT="$TARGET_RUST_TARGET"
+fi
 
 AC_CACHE_CHECK([for options to compile assembly], [grub_cv_cc_target_asm_compile], [
 test_program=
@@ -2185,6 +2193,7 @@ AC_SUBST(TARGET_LDFLAGS)
 AC_SUBST(TARGET_CPPFLAGS)
 AC_SUBST(TARGET_CCASFLAGS)
 AC_SUBST(TARGET_RUST_TARGET)
+AC_SUBST(TARGET_RUST_TARGET_SHORT)
 
 AC_SUBST(TARGET_IMG_LDFLAGS)
 AC_SUBST(TARGET_IMG_CFLAGS)
