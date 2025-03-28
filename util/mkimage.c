@@ -462,6 +462,24 @@ static const struct grub_install_image_target_desc image_targets[] =
       .default_compression = GRUB_COMPRESSION_NONE
     },
     {
+      .dirname = "mipsel-malta",
+      .names = { "mipsel-malta-elf", NULL },
+      .voidp_sizeof = 4,
+      .bigendian = 0,
+      .id = IMAGE_LOONGSON_ELF,
+      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
+      .total_module_size = GRUB_KERNEL_MIPS_MALTA_TOTAL_MODULE_SIZE,
+      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
+      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
+      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
+      .section_align = 1,
+      .vaddr_offset = 0,
+      .link_addr = GRUB_KERNEL_MIPS_MALTA_LINK_ADDR,
+      .elf_target = EM_MIPS,
+      .link_align = GRUB_KERNEL_MIPS_MALTA_LINK_ALIGN,
+      .default_compression = GRUB_COMPRESSION_NONE
+    },
+    {
       .dirname = "mipsel-qemu_mips",
       .names = { "mipsel-qemu_mips-elf", NULL },
       .voidp_sizeof = 4,
@@ -531,6 +549,24 @@ static const struct grub_install_image_target_desc image_targets[] =
       .link_addr = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ADDR,
       .elf_target = EM_MIPS,
       .link_align = GRUB_KERNEL_MIPS_QEMU_MIPS_LINK_ALIGN,
+      .default_compression = GRUB_COMPRESSION_NONE
+    },
+    {
+      .dirname = "mips-malta",
+      .names = { "mips-malta-elf", NULL },
+      .voidp_sizeof = 4,
+      .bigendian = 1,
+      .id = IMAGE_LOONGSON_ELF,
+      .flags = PLATFORM_FLAGS_DECOMPRESSORS,
+      .total_module_size = GRUB_KERNEL_MIPS_MALTA_TOTAL_MODULE_SIZE,
+      .decompressor_compressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_COMPRESSED_SIZE,
+      .decompressor_uncompressed_size = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_SIZE,
+      .decompressor_uncompressed_addr = GRUB_DECOMPRESSOR_MIPS_LOONGSON_UNCOMPRESSED_ADDR,
+      .section_align = 1,
+      .vaddr_offset = 0,
+      .link_addr = GRUB_KERNEL_MIPS_MALTA_LINK_ADDR,
+      .elf_target = EM_MIPS,
+      .link_align = GRUB_KERNEL_MIPS_MALTA_LINK_ALIGN,
       .default_compression = GRUB_COMPRESSION_NONE
     },
     {

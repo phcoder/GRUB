@@ -187,7 +187,9 @@ case "$target_cpu"-"$platform" in
   mips-qemu_mips) ;;
   mips-qemu-mips) platform=qemu_mips;;
   mips-arc) ;;
+  mips-malta) ;;
   mipsel-arc) ;;
+  mipsel-malta) ;;
   mipsel-qemu_mips) ;;
   mipsel-qemu-mips) platform=qemu_mips;;
   mipsel-yeeloong) platform=loongson ;;
@@ -253,6 +255,7 @@ case "$platform" in
   emu)		machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_EMU=1" ;;
   loongson)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_LOONGSON=1" ;;
   qemu_mips)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_QEMU_MIPS=1" ;;
+  malta)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_MALTA=1" ;;
   arc)		machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_ARC=1" ;;
 esac
 if test x${target_cpu} = xmipsel ; then
@@ -270,7 +273,7 @@ case "${target_cpu}-$platform" in
         TARGET_LINK_ADDR=0x80700000
 	TARGET_DECOMPRESSOR_LINK_ADDR=0x80600000
 	;;
-     mips*-qemu_mips | mips*-loongson)
+     mips*-qemu_mips | mips*-loongson | mips*-malta)
         TARGET_DECOMPRESSOR_LINK_ADDR=0x80100000
 	;;
 esac
@@ -1823,7 +1826,7 @@ if test x"$grub_build_mkfont_excuse" = x ; then
 else
   enable_build_grub_mkfont=no
 fi
-if test x"$enable_build_grub_mkfont" = xno && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
+if test x"$enable_build_grub_mkfont" = xno && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xmalta || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
   if test x"$grub_build_mkfont_excuse" = x ; then
     AC_MSG_ERROR([qemu, coreboot and loongson ports need build-time grub-mkfont])
   else
@@ -1908,7 +1911,7 @@ if test x"$enable_build_grub_mkfont" = xno ; then
   FONT_SOURCE=
 fi
 
-if test "x$FONT_SOURCE" = x && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
+if test "x$FONT_SOURCE" = x && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xmalta || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
   if test x"$grub_build_mkfont_excuse" = x ; then
     AC_MSG_ERROR([qemu, coreboot and loongson ports need unifont])
   else
@@ -2182,6 +2185,7 @@ AM_CONDITIONAL([COND_mips], [test x$target_cpu = xmips -o x$target_cpu = xmipsel
 AM_CONDITIONAL([COND_mips_arc], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xarc])
 AM_CONDITIONAL([COND_mips_loongson], [test x$target_cpu = xmipsel -a x$platform = xloongson])
 AM_CONDITIONAL([COND_mips_qemu_mips], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xqemu_mips])
+AM_CONDITIONAL([COND_mips_malta], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xmalta])
 AM_CONDITIONAL([COND_mipsel], [test x$target_cpu = xmipsel])
 AM_CONDITIONAL([COND_mipseb], [test x$target_cpu = xmips])
 AM_CONDITIONAL([COND_powerpc_ieee1275], [test x$target_cpu = xpowerpc -a x$platform = xieee1275])

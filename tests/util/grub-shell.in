@@ -118,6 +118,13 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	qemuopts="-M mips $qemuopts"
 	console=vga_text
 	;;
+
+    mips-malta)
+	boot=malta
+	qemu=qemu-system-mips
+	qemuopts="-M malta $qemuopts"
+	console=vga_text
+	;;
     mips-arc)
 	boot=cd
 	qemu=qemu-system-mips64
@@ -139,6 +146,12 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	boot=mipsel_qemu
 	qemu=qemu-system-mipsel
 	qemuopts="-M mips $qemuopts"
+	console=vga_text
+	;;
+    mipsel-malta)
+	boot=mipsel_malta
+	qemu=qemu-system-mipsel
+	qemuopts="-M malta $qemuopts"
 	console=vga_text
 	;;
     mipsel-loongson)
@@ -421,7 +434,9 @@ for option in "$@"; do
 	elif [ "$dev" = "qemu" ] ; then boot=qemu;
 	elif [ "$dev" = "coreboot" ] ; then boot=coreboot;
 	elif [ "$dev" = "mips_qemu" ] ; then boot=mips_qemu;
+	elif [ "$dev" = "mips_malta" ] ; then boot=mips_malta;
 	elif [ "$dev" = "mipsel_qemu" ] ; then boot=mipsel_qemu;
+	elif [ "$dev" = "mipsel_malta" ] ; then boot=mipsel_malta;
 	elif [ "$dev" = "mipsel_fulong2e" ] ; then boot=mipsel_fulong2e;
 	else
 	    echo "Unrecognized boot method \`$dev'" 1>&2
@@ -585,6 +600,11 @@ if [ x$boot = xmipsel_qemu ]; then
     device="cdrom "
 fi
 
+if [ x$boot = xmipsel_malta ]; then
+    bootdev="-kernel ${rom_directory}/mipsel-malta.elf"
+    device="cdrom "
+fi
+
 if [ x$boot = xmipsel_fulong2e ]; then
     bootdev="-kernel ${rom_directory}/mipsel-loongson.elf -append machtype=lemote-fuloong-2e"
     device="cdrom "
@@ -592,6 +612,11 @@ fi
 
 if [ x$boot = xmips_qemu ]; then
     bootdev="-kernel ${rom_directory}/mips-qemu_mips.elf"
+    device="cdrom "
+fi
+
+if [ x$boot = xmips_malta ]; then
+    bootdev="-kernel ${rom_directory}/mips-malta.elf"
     device="cdrom "
 fi
 
