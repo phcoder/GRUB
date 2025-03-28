@@ -301,6 +301,8 @@ kernel = {
   mips_malta = kern/mips/malta/init.c;
   mips_malta = term/ns8250.c;
   mips_malta = term/serial.c;
+  mips_malta = kern/mips/malta/pci.c;
+  mips_malta = bus/pci.c;
 
   mips_qemu_mips = kern/mips/qemu_mips/init.c;
   mips_qemu_mips = term/ns8250.c;
@@ -610,7 +612,9 @@ module = {
 module = {
   name = cs5536;
   x86 = bus/cs5536.c;
+  mips_malta = bus/cs5536.c;
   enable = x86;
+  enable = mips_malta;
 };
 
 module = {
@@ -2484,6 +2488,7 @@ module = {
   name = keylayouts;
   common = commands/keylayouts.c;
   enable = x86;
+  enable = mips_malta;
 };
 
 module = {
