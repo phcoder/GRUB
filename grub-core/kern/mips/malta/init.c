@@ -9,6 +9,7 @@
 #include <grub/machine/memory.h>
 #include <grub/machine/kernel.h>
 #include <grub/machine/console.h>
+#include <grub/machine/pci.h>
 #include <grub/cpu/memory.h>
 #include <grub/memory.h>
 #include <grub/video.h>
@@ -72,10 +73,27 @@ grub_exit (void)
   grub_halt ();
 }
 
+static int
+grub_shutdown_pci_iter (grub_pci_device_t dev, grub_pci_id_t pciid,
+			void *data __attribute__ ((unused)))
+{
+  /* QEMU.  */
+  if (pciid == 0x71138086)
+    {
+      grub_pci_address_t addr;
+      addr = grub_pci_make_address (dev, 0x40);
+      grub_pci_write (addr, 0x7001);
+      addr = grub_pci_make_address (dev, 0x80);
+      grub_pci_write (addr, grub_pci_read (addr) | 1);
+      grub_outw (0x2000, GRUB_MACHINE_PCI_IO_BASE + 0x7004);
+    }
+  return 0;
+}
+
 void
 grub_halt (void)
 {
-  grub_outl (42, 0xbfbf0004);
+  grub_pci_iterate (grub_shutdown_pci_iter, NULL);
   while (1);
 }
 
