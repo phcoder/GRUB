@@ -226,8 +226,10 @@ static struct platform_whitelist whitelists[] = {
   /* video is compiled-in on MIPS.  */
   {"mipsel", "loongson", (const char *[]) {"all_video", 0}},
   {"mipsel", "qemu_mips", (const char *[]) {"all_video", 0}},
+  {"mipsel", "malta", (const char *[]) {"all_video", 0}},
   {"mipsel", "arc", (const char *[]) {"all_video", 0}},
   {"mips", "qemu_mips", (const char *[]) {"all_video", 0}},
+  {"mips", "malta", (const char *[]) {"all_video", 0}},
   {"mips", "arc", (const char *[]) {"all_video", 0}},
 };
 
