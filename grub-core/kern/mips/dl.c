@@ -241,9 +241,16 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	  *(grub_uint16_t *) addr += sym_value & 0xffff;
 	  break;
 	case R_MIPS_REL32:
-	  *(grub_uint32_t *) addr += (grub_addr_t) mod->base - mod->min_addr;
-	  if (s->sh_type == SHT_RELA)
-	    *(grub_uint32_t *) addr += ((Elf_Rela *) rel)->r_addend;
+	  if (ELF_R_SYM (rel->r_info) == 0 || ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+	    {
+	      *(grub_uint32_t *) addr += (grub_addr_t) mod->base - mod->min_addr;
+	      if (s->sh_type == SHT_RELA)
+		*(grub_uint32_t *) addr += ((Elf_Rela *) rel)->r_addend;
+	    }
+	  else
+	    {
+	      *(grub_uint32_t *) addr = (grub_addr_t) sym_value;
+	    }
 	  break;
 	case R_MIPS_32:
 	  *(grub_uint32_t *) addr += sym_value;

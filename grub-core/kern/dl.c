@@ -389,9 +389,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	  break;
 
 	case STT_SECTION:
-	  /* Note: it's += in symtab and = in dynsym. Since we use
-	     dynsym, we use =.  */
-	  sym->st_value = (Elf_Addr) mod->base - mod->min_addr;
+	  sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
 	  break;
 
 	case STT_FILE:
