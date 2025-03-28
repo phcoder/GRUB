@@ -123,7 +123,8 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	boot=malta
 	qemu=qemu-system-mips
 	qemuopts="-M malta $qemuopts"
-	console=vga_text
+	console=
+	trim=1
 	;;
     mips-arc)
 	boot=cd
@@ -152,7 +153,8 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	boot=mipsel_malta
 	qemu=qemu-system-mipsel
 	qemuopts="-M malta $qemuopts"
-	console=vga_text
+	console=
+	trim=1
 	;;
     mipsel-loongson)
 	boot=mipsel_fulong2e
