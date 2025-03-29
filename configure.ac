@@ -1458,7 +1458,7 @@ grub_CHECK_PIC
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if xtest x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
+if test x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
 elif test x$platform = xefi ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
