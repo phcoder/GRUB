@@ -88,11 +88,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	    grub_dprintf ("dl", "reloc_abs64 %p => 0x%016llx, %p\n",
 			  place, (unsigned long long) sym_addr, abs_place);
 
-	    *abs_place += (grub_uint64_t) sym_addr;
+	    *abs_place = (grub_uint64_t) sym_addr;
 	  }
 	  break;
 	case R_LARCH_RELATIVE:
-	  *(grub_uint64_t *)place += (grub_addr_t) mod->base - mod->min_addr;
+	  *(grub_uint64_t *)place = (grub_addr_t) mod->base - mod->min_addr;
 	  if (s->sh_type == SHT_RELA)
 	    *(grub_uint64_t *)place += ((Elf_Rela *) rel)->r_addend;
 	  break;

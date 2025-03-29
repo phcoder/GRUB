@@ -1448,11 +1448,9 @@ grub_CHECK_PIC
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if test x$target_cpu = xarm64 && test "x$grub_cv_cc_target_clang" = xyes ; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
-elif xtest x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
+if xtest x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
-elif test x$target_cpu = xriscv32 || test x$target_cpu = xloongarch64 ; then
+elif test x$platform = xefi ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 elif [ x"$pic_possible" = xyes ]; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
