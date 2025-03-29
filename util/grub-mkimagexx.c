@@ -1090,10 +1090,16 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		 sym_addr += addend;
 		 switch (ELF_R_TYPE (info))
 		   {
+		   case R_AARCH64_JUMP_SLOT:
+		     *target = grub_host_to_target64 (sym_addr);
+		     break;
 		   case R_AARCH64_ABS64:
 		     {
 		       *target = grub_host_to_target64 (grub_target_to_host64 (*target) + sym_addr);
 		     }
+		     break;
+		   case R_AARCH64_RELATIVE:
+		     *target = grub_host_to_target64 (addend + layout->vaddr_diff);
 		     break;
 		   case R_AARCH64_PREL32:
 		     {
@@ -1769,7 +1775,9 @@ translate_relocation_pe (struct translate_context *ctx,
 #if defined(MKIMAGE_ELF64)
       switch (ELF_R_TYPE (info))
 	{
+	case R_AARCH64_RELATIVE:
 	case R_AARCH64_ABS64:
+	case R_AARCH64_JUMP_SLOT:
 	  {
 	    ctx->current_address
 	      = add_fixup_entry (&ctx->lst,
