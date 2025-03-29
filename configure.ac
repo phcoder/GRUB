@@ -772,7 +772,7 @@ case "x$target_cpu-$platform" in
      	TARGET_RUST_TARGET_SHORT=mipsel1
 	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
 	;;
-     xmips-*)
+     xmips-* | xmipsel-*)
 	TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
 	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
         ;;
