@@ -1374,6 +1374,9 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 
 		 switch (ELF_R_TYPE (info))
 		   {
+		   case R_RISCV_RELATIVE:
+		     *target = grub_host_to_target_addr (addend + layout->vaddr_diff);
+		     break;
 		   case R_RISCV_ADD8:
 		     *t8 = *t8 + sym_addr;
 		     break;
@@ -1896,6 +1899,9 @@ translate_relocation_pe (struct translate_context *ctx,
     case EM_RISCV:
       switch (ELF_R_TYPE (info))
 	{
+#if defined(MKIMAGE_ELF32)
+	case R_RISCV_RELATIVE:
+#endif
 	case R_RISCV_32:
 	  {
 	    ctx->current_address
@@ -1905,6 +1911,9 @@ translate_relocation_pe (struct translate_context *ctx,
 				 image_target);
 	  }
 	  break;
+#if defined(MKIMAGE_ELF64)
+	case R_RISCV_RELATIVE:
+#endif
 	case R_RISCV_64:
 	  {
 	    ctx->current_address
