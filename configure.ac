@@ -1460,8 +1460,6 @@ grub_CHECK_PIC
 # explicitly.
 if test x$target_cpu = xmips || test x$target_cpu = xmipsel ; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
-elif test x$platform = xefi ; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 elif [ x"$pic_possible" = xyes ]; then
    TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
 fi]
