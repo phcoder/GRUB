@@ -2369,6 +2369,7 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
 
   Elf_Addr min_vaddr = ~(Elf_Addr)0;
   Elf_Addr max_vaddr = 0;
+  Elf_Addr max_filled_vaddr = 0;
   Elf_Addr max_align = 1;
   Elf_Addr max_execvaddr = 0;
   Elf_Addr min_wvaddr = ~(Elf_Addr)0;
@@ -2386,6 +2387,8 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
 	  min_vaddr = grub_target_to_host (p->p_vaddr);
 	if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_vaddr)
 	  max_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
+	if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz) > max_filled_vaddr)
+	  max_filled_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz);
 	if ((grub_target_to_host32 (p->p_flags) & PF_X) && grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_execvaddr)
 	  max_execvaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
 	if ((grub_target_to_host32 (p->p_flags) & PF_W) && grub_target_to_host (p->p_vaddr) < min_wvaddr)
@@ -2414,10 +2417,17 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
     }
 
   layout->vaddr_diff = image_target->vaddr_offset;
-  layout->off_diff = -min_vaddr;
-  layout->kernel_size = max_vaddr - min_vaddr;
+  layout->off_diff = -(grub_int64_t)min_vaddr;
+  layout->kernel_size = max_filled_vaddr - min_vaddr;
+  layout->bss_size = max_vaddr - max_filled_vaddr;
   layout->exec_size = max_execvaddr - min_vaddr;
   layout->align = max_align;
+
+  if (image_target->id == IMAGE_EFI)
+    {
+      layout->kernel_size += layout->bss_size;
+      layout->bss_size = 0;
+    }
 
 #ifdef MKIMAGE_ELF32
   if (image_target->elf_target == EM_ARM)
@@ -2488,63 +2498,6 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
   smd.strtab = (char *) e + grub_host_to_target_addr (s->sh_offset);
 
   SUFFIX (locate_sections) (e, kernel_path, &smd, layout, image_target);
-
-#if 0
-  if (!is_relocatable (image_target))
-    {
-      Elf_Addr current_address = layout->kernel_size;
-      Elf_Addr bss_start = layout->kernel_size;
-      bool is_first = true;
-
-      for (i = 0, s = smd.sections;
-	   i < smd.num_sections;
-	   i++, s = (Elf_Shdr *) ((char *) s + smd.section_entsize))
-	if (grub_target_to_host32 (s->sh_type) == SHT_NOBITS)
-	  {
-	    Elf_Word sec_align = grub_host_to_target_addr (s->sh_addralign);
-	    const char *name = smd.strtab + grub_host_to_target32 (s->sh_name);
-
-	    if (sec_align)
-	      current_address = ALIGN_UP (current_address
-					  + image_target->vaddr_offset,
-					  sec_align)
-		- image_target->vaddr_offset;
-
-	    grub_util_info ("locating the section %s at 0x%"
-			    GRUB_HOST_PRIxLONG_LONG,
-			    name, (unsigned long long) current_address);
-	    if (!is_relocatable (image_target))
-	      current_address = grub_host_to_target_addr (s->sh_addr)
-		- image_target->link_addr;
-
-	    if (is_first == true)
-	      {
-		bss_start = current_address;
-		is_first = false;
-	      }
-
-	    smd.vaddrs[i] = current_address
-	      + image_target->vaddr_offset;
-	    current_address += grub_host_to_target_addr (s->sh_size);
-	  }
-      current_address = ALIGN_UP (current_address + image_target->vaddr_offset,
-				  image_target->section_align)
-	- image_target->vaddr_offset;
-
-      if (image_target->id == IMAGE_YEELOONG_FLASH
-	  || image_target->id == IMAGE_FULOONG2F_FLASH
-	  || image_target->id == IMAGE_LOONGSON_ELF
-	  || image_target->id == IMAGE_QEMU_MIPS_FLASH
-	  || image_target->id == IMAGE_MIPS_ARC)
-	{
-	  layout->kernel_size = bss_start;
-	}
-
-      layout->bss_size = current_address - layout->kernel_size;
-    }
-  else
-#endif
-    layout->bss_size = 0;
 
   if (image_target->id == IMAGE_SPARC64_AOUT
       || image_target->id == IMAGE_SPARC64_RAW
@@ -2633,8 +2586,9 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 	  continue;
 	memcpy (out_img + grub_target_to_host (p->p_vaddr) + layout->off_diff,
 	       kernel_img + grub_target_to_host (p->p_offset), grub_target_to_host (p->p_filesz));
-	memset (out_img + grub_target_to_host (p->p_vaddr) + layout->off_diff + grub_target_to_host (p->p_filesz),
-		0, grub_target_to_host (p->p_memsz) - grub_target_to_host (p->p_filesz));
+	if (image_target->id == IMAGE_EFI)
+	  memset (out_img + grub_target_to_host (p->p_vaddr) + layout->off_diff + grub_target_to_host (p->p_filesz),
+		  0, grub_target_to_host (p->p_memsz) - grub_target_to_host (p->p_filesz));
       }
 
   if (is_relocatable (image_target))

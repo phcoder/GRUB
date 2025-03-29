@@ -36,8 +36,8 @@ struct grub_mkimage_layout
   unsigned ia64jmpnum;
   grub_uint32_t bss_start;
   grub_uint32_t end;
-  grub_uint64_t vaddr_diff;
-  grub_uint64_t off_diff;
+  grub_int64_t vaddr_diff;
+  grub_int64_t off_diff;
 };
 
 /* Private header. Use only in mkimage-related sources.  */
