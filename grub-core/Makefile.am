@@ -18,6 +18,7 @@ AM_CPPFLAGS = $(TARGET_CPPFLAGS) $(CPPFLAGS_DEFAULT)
 AM_CCASFLAGS = $(TARGET_CCASFLAGS) $(CCASFLAGS_DEFAULT)
 RUST_TARGET = $(TARGET_RUST_TARGET)
 RUST_TARGET_SHORT = $(TARGET_RUST_TARGET_SHORT)
+RUST_FLAGS = $(TARGET_RUST_FLAGS)
 
 CFLAGS_PROGRAM += $(CFLAGS_PLATFORM)
 LDFLAGS_PROGRAM += $(LDFLAGS_PLATFORM)
@@ -527,4 +528,4 @@ windowsdir: $(PROGRAMS) $(starfield_DATA) $(platform_DATA)
 .PHONY: rust-compile
 
 rust-compile:
-	(cd $(srcdir)/rust; RUSTFLAGS="-C linker=$(TARGET_CC) -C link-args=-nostdlib" cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)
+	(cd $(srcdir)/rust; RUSTFLAGS="-C linker=$(TARGET_CC) $(RUST_FLAGS) -C link-args=-nostdlib" cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)

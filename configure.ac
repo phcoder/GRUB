@@ -747,6 +747,7 @@ int main (void);
 fi
 
 TARGET_RUST_TARGET_SHORT=
+TARGET_RUST_FLAGS=
 case "x$target_cpu-$platform" in
      xarm-*)
 	TARGET_RUST_TARGET=armv5te-unknown-linux-gnueabi
@@ -763,11 +764,20 @@ case "x$target_cpu-$platform" in
      xriscv64-*)
 	TARGET_RUST_TARGET=riscv64gc-unknown-linux-gnu
 	;;
-     xmipsel-*)
+     xmipsel-loongson)
      	TARGET_RUST_TARGET=mipsel1.json
      	TARGET_RUST_TARGET_SHORT=mipsel1
+	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
 	;;
-     xx86_64-* | xpowerpc-* | xsparc64-* | xmips-* | xloongarch64-*)
+     xmips-*)
+	TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
+	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
+        ;;
+     xloongarch64-*)
+        TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
+	TARGET_RUST_FLAGS="-C target-feature=-lsx"
+	;;
+     xx86_64-* | xpowerpc-* | xsparc64-*)
         TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
         ;;
      *)
@@ -2192,6 +2202,7 @@ AC_SUBST(TARGET_CPPFLAGS)
 AC_SUBST(TARGET_CCASFLAGS)
 AC_SUBST(TARGET_RUST_TARGET)
 AC_SUBST(TARGET_RUST_TARGET_SHORT)
+AC_SUBST(TARGET_RUST_FLAGS)
 
 AC_SUBST(TARGET_IMG_LDFLAGS)
 AC_SUBST(TARGET_IMG_CFLAGS)
