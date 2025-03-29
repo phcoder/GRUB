@@ -779,6 +779,7 @@ arm_get_trampoline_size (Elf_Ehdr *e,
 	      {
 	      case R_ARM_ABS32:
 	      case R_ARM_V4BX:
+	      case R_ARM_JUMP_SLOT:
 		break;
 	      case R_ARM_THM_CALL:
 	      case R_ARM_THM_JUMP24:
@@ -1265,6 +1266,13 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		 sym_addr -= image_target->vaddr_offset;
 		 switch (ELF_R_TYPE (info))
 		   {
+		   case R_ARM_JUMP_SLOT:
+		     {
+		       grub_util_info ("  JUMP:\toffset=%d\t(0x%08x)",
+				       (int) sym_addr, (int) sym_addr);
+		       *target = grub_host_to_target32 (sym_addr);
+		       break;
+		     }
 		   case R_ARM_ABS32:
 		     {
 		       grub_util_info ("  ABS32:\toffset=%d\t(0x%08x)",
@@ -1889,6 +1897,7 @@ translate_relocation_pe (struct translate_context *ctx,
 	  break;
 	  /* Create fixup entry for PE/COFF loader */
 	case R_ARM_ABS32:
+	case R_ARM_JUMP_SLOT:
 	  {
 	    ctx->current_address
 	      = add_fixup_entry (&ctx->lst,
