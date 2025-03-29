@@ -503,6 +503,8 @@ have_bootdev (enum grub_install_plat pl)
     case GRUB_INSTALL_PLATFORM_I386_MULTIBOOT:
     case GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS:
     case GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
 
     case GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON:
     case GRUB_INSTALL_PLATFORM_ARM_UBOOT:
@@ -948,6 +950,8 @@ main (int argc, char *argv[])
     case GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON:
     case GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS:
     case GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
       disk_module = xstrdup ("native");
       break;
 
@@ -987,6 +991,8 @@ main (int argc, char *argv[])
     case GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON:
     case GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS:
     case GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
     case GRUB_INSTALL_PLATFORM_I386_XEN:
     case GRUB_INSTALL_PLATFORM_X86_64_XEN:
     case GRUB_INSTALL_PLATFORM_I386_XEN_PVH:
@@ -1535,6 +1541,8 @@ main (int argc, char *argv[])
 		  case GRUB_INSTALL_PLATFORM_I386_MULTIBOOT:
 		  case GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS:
 		  case GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS:
+		  case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+		  case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
 		    g = grub_util_guess_baremetal_drive (*curdev);
 		    break;
 		  case GRUB_INSTALL_PLATFORM_MIPS_ARC:
@@ -1623,6 +1631,8 @@ main (int argc, char *argv[])
     case GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON:
     case GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS:
     case GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
       core_name = "core.elf";
       snprintf (mkimage_target, sizeof (mkimage_target),
 		"%s-%s-elf",
@@ -1734,6 +1744,8 @@ main (int argc, char *argv[])
     case GRUB_INSTALL_PLATFORM_I386_XEN:
     case GRUB_INSTALL_PLATFORM_X86_64_XEN:
     case GRUB_INSTALL_PLATFORM_I386_XEN_PVH:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
       break;
       /* pacify warning.  */
     case GRUB_INSTALL_PLATFORM_MAX:
@@ -2025,6 +2037,8 @@ main (int argc, char *argv[])
     case GRUB_INSTALL_PLATFORM_I386_XEN:
     case GRUB_INSTALL_PLATFORM_X86_64_XEN:
     case GRUB_INSTALL_PLATFORM_I386_XEN_PVH:
+    case GRUB_INSTALL_PLATFORM_MIPSEL_MALTA:
+    case GRUB_INSTALL_PLATFORM_MIPS_MALTA:
       grub_util_warn ("%s",
 		      _("WARNING: no platform-specific install was performed"));
       break;
