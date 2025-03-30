@@ -936,8 +936,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  break;
 
 		case R_X86_64_RELATIVE:
-		  *target = grub_host_to_target64 (/* grub_target_to_host64 (*target)
-						     + */addend + layout->vaddr_diff);
+		  *target = grub_host_to_target64 (addend + layout->vaddr_diff);
 		  break;
 
 		case R_X86_64_GLOB_DAT:
