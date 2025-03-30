@@ -62,7 +62,7 @@ asn1_read_uint32 (asn1_node node, const char *name, grub_uint32_t *out)
   grub_uint32_t tmp = 0;
   grub_uint8_t *ptr;
   void *data = NULL;
-  grub_size_t data_size;
+  grub_size_t data_size = 0;
   int ret;
 
   ret = asn1_allocate_and_read (node, name, &data, &data_size);
