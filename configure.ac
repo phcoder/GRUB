@@ -275,6 +275,7 @@ case "${target_cpu}-$platform" in
 	;;
 esac
 
+AC_SUBST(TARGET_RELOCATABLE)
 AC_SUBST(TARGET_LINK_ADDR)
 AC_SUBST(TARGET_DECOMPRESSOR_LINK_ADDR)
 
@@ -876,16 +877,8 @@ if ( test "x$target_cpu" = xi386 || test "x$target_cpu" = xx86_64 ); then
 fi
 
 if test "x$target_cpu" = xloongarch64; then
-  AC_CACHE_CHECK([whether _mno_explicit_relocs works], [grub_cv_cc_mno_explicit_relocs], [
-    CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -Werror"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
-	[grub_cv_cc_mno_explicit_relocs=yes],
-	[grub_cv_cc_mno_explicit_relocs=no])
-  ])
-  if test "x$grub_cv_cc_mno_explicit_relocs" = xyes; then
-    TARGET_CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -fno-plt"
-    TARGET_CCASFLAGS="$TARGET_CCASFLAGS -mno-explicit-relocs -fno-plt"
-  fi
+  TARGET_CFLAGS="$TARGET_CFLAGS -fno-plt"
+  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fno-plt"
 
   AC_CACHE_CHECK([for no-relax options], grub_cv_target_cc_mno_relax, [
     grub_cv_target_cc_mno_relax=no
@@ -1199,11 +1192,14 @@ elif test x"$target_cpu" = xi386 || test x"$target_cpu" = xx86_64; then
     AC_MSG_ERROR([no suitable link format found])
   fi
   TARGET_LDFLAGS="$TARGET_LDFLAGS -Wl,$grub_cv_target_cc_link_format"
+  TARGET_RELOCATABLE='-shared'
   if test x"$grub_cv_target_cc_link_format" = x-mi386pe ; then
     TARGET_OBJ2ELF='./build-grub-pe2elf$(BUILD_EXEEXT)'
+    TARGET_RELOCATABLE='-Wl,-r'
   fi
   if test x"$grub_cv_target_cc_link_format" = x-mi386pep ; then
     TARGET_OBJ2ELF='./build-grub-pep2elf$(BUILD_EXEEXT)'
+    TARGET_RELOCATABLE='-Wl,-r'
   fi
 fi
 
@@ -1238,6 +1234,10 @@ else
   TARGET_IMG_LDFLAGS_AC='-Wl,-N'
   TARGET_IMG_BASE_LDOPT="-Wl,-Ttext"
   TARGET_IMG_CFLAGS=
+fi
+
+if test x${platform} = xefi || test x${platform} = xemu; then
+  TARGET_LDFLAGS_OLDMAGIC=
 fi
 
 CFLAGS="$TARGET_CFLAGS"
@@ -1420,18 +1420,27 @@ grub_CHECK_PIC
 [# On most platforms we don't want PIC as it only makes relocations harder
 # and code less efficient. On mips we want to have one got table per module
 # and reload $gp in every function.
-# GCC implements it using symbol __gnu_local_gp in non-PIC as well.
-# However with clang we need PIC for this reloading to happen.
 # With arm64 we need relocations that are in some way representable in
 # PE as we need to support arm64-efi. Without -fPIC clang generates
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if ( test x$target_cpu = xmips || test x$target_cpu = xmipsel || test x$target_cpu = xarm64 ) && test "x$grub_cv_cc_target_clang" = xyes ; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
-elif [ x"$pic_possible" = xyes ]; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
-fi]
+case $target_cpu-$platform in
+     mips-* | mipsel-*)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
+	;;
+     arm64-*)
+	if test "x$grub_cv_cc_target_clang" = xyes ; then
+	   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
+	fi
+	;;
+     riscv32-* | ia64-*)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
+	;;
+     *)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
+	;;
+esac]
 
 CFLAGS="$TARGET_CFLAGS"
 

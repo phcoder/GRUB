@@ -41,13 +41,13 @@
 #if !defined (GRUB_UTIL) && !defined (GRUB_MACHINE_EMU) && !defined (GRUB_KERNEL)
 
 #define GRUB_MOD_INIT(name)	\
-static void grub_mod_init (grub_dl_t mod __attribute__ ((unused))) __attribute__ ((used)); \
-static void \
+void grub_mod_init (grub_dl_t mod __attribute__ ((unused))) __attribute__ ((used)); \
+void \
 grub_mod_init (grub_dl_t mod __attribute__ ((unused)))
 
 #define GRUB_MOD_FINI(name)	\
-static void grub_mod_fini (void) __attribute__ ((used)); \
-static void \
+void grub_mod_fini (void) __attribute__ ((used)); \
+void \
 grub_mod_fini (void)
 
 #elif defined (GRUB_KERNEL)
@@ -152,15 +152,6 @@ static const char grub_module_name_##name[] \
 
 #ifndef ASM_FILE
 
-struct grub_dl_segment
-{
-  struct grub_dl_segment *next;
-  void *addr;
-  grub_size_t size;
-  unsigned section;
-};
-typedef struct grub_dl_segment *grub_dl_segment_t;
-
 struct grub_dl;
 
 struct grub_dl_dep
@@ -177,7 +168,6 @@ struct grub_dl
   grub_uint64_t ref_count;
   int persistent;
   grub_dl_dep_t dep;
-  grub_dl_segment_t segment;
   Elf_Sym *symtab;
   grub_size_t symsize;
   void (*init) (struct grub_dl *mod);
@@ -190,9 +180,16 @@ struct grub_dl
 #endif
 #ifdef __mips__
   grub_uint32_t *reginfo;
+  grub_uint32_t gotsym;
+  grub_uint32_t local_gotno;
+  grub_uint32_t symtabno;
+#endif
+#if defined (__mips__) || defined(__ia64__)
+  grub_size_t pltgot;
 #endif
   void *base;
   grub_size_t sz;
+  grub_addr_t min_addr;
   struct grub_dl *next;
 };
 #endif
@@ -263,12 +260,14 @@ grub_err_t grub_arch_dl_check_header (void *ehdr);
 #ifndef GRUB_UTIL
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg);
+			       Elf_Shdr *s);
 #endif
 
 #if defined (_mips)
 #define GRUB_LINKER_HAVE_INIT 1
 void grub_arch_dl_init_linker (void);
+
+grub_err_t grub_arch_dl_relocate_pltgot (grub_dl_t mod);
 #endif
 
 #define GRUB_IA64_DL_TRAMP_ALIGN 16
@@ -280,6 +279,10 @@ grub_ia64_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 grub_err_t
 grub_arm64_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 				  grub_size_t *got);
+
+#if defined (__ia64__) || defined (__mips__)
+void grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf_Dyn *dyn, grub_size_t sz);
+#endif
 
 #if defined (__ia64__)
 #define GRUB_ARCH_DL_TRAMP_ALIGN GRUB_IA64_DL_TRAMP_ALIGN

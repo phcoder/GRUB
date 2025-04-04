@@ -163,6 +163,16 @@ get_shdr (const struct grub_module_verifier_arch *arch, Elf_Ehdr *e, Elf_Word in
   return s;
 }
 
+static Elf_Phdr *
+get_phdr (const struct grub_module_verifier_arch *arch, Elf_Ehdr *e, Elf_Word index)
+{
+  if (grub_target_to_host (e->e_phoff) == 0)
+    grub_util_error ("Invalid program header offset");
+
+  return (Elf_Phdr *) ((char *) e + grub_target_to_host (e->e_phoff) +
+		    index * grub_target_to_host16 (e->e_phentsize));
+}
+
 static Elf_Shnum
 get_shnum (const struct grub_module_verifier_arch *arch, Elf_Ehdr *e)
 {
@@ -252,7 +262,7 @@ get_symtab (const struct grub_module_verifier_arch *arch, Elf_Ehdr *e, Elf_Word 
     {
       s = get_shdr (arch, e, i, module_size);
 
-      if (grub_target_to_host32 (s->sh_type) == SHT_SYMTAB)
+      if (grub_target_to_host32 (s->sh_type) == SHT_DYNSYM)
 	break;
     }
 
@@ -357,7 +367,8 @@ is_symbol_local(Elf_Sym *sym)
 static void
 section_check_relocations (const char * const modname,
 			   const struct grub_module_verifier_arch *arch, void *ehdr,
-			   Elf_Shdr *s, size_t target_seg_size, size_t module_size)
+			   Elf_Shdr *s, size_t module_size,
+			   grub_uint64_t min_addr, grub_uint64_t max_addr)
 {
   Elf_Rel *rel, *max;
   Elf_Sym *symtab;
@@ -374,11 +385,16 @@ section_check_relocations (const char * const modname,
     {
       Elf_Sym *sym;
       unsigned i;
-
-      if (target_seg_size < grub_target_to_host (rel->r_offset))
-	grub_util_error ("%s: reloc offset is out of the segment", modname);
-
       grub_uint32_t type = ELF_R_TYPE (grub_target_to_host (rel->r_info));
+
+      if (type == 0)
+	continue;
+
+      if (grub_target_to_host (rel->r_offset) < min_addr || grub_target_to_host (rel->r_offset) >= max_addr)
+	grub_util_error ("%s: reloc offset is out of the segment: %llx not in %llx-%llx",
+			 modname,
+			 (long long) grub_target_to_host (rel->r_offset),
+			 (long long) min_addr, (long long) max_addr);
 
       if (arch->machine == EM_SPARCV9)
 	type &= 0xff;
@@ -439,7 +455,7 @@ section_check_relocations (const char * const modname,
 
 static void
 check_relocations (const char * const modname,
-		   const struct grub_module_verifier_arch *arch, Elf_Ehdr *e, size_t module_size)
+		   const struct grub_module_verifier_arch *arch, Elf_Ehdr *e, size_t module_size, grub_uint64_t min_addr, grub_uint64_t max_addr)
 {
   Elf_Shdr *s;
   unsigned i;
@@ -457,12 +473,7 @@ check_relocations (const char * const modname,
 	  if (grub_target_to_host32 (s->sh_type) == SHT_RELA && !(arch->flags & GRUB_MODULE_VERIFY_SUPPORTS_RELA))
 	    grub_util_error ("%s: unsupported SHT_RELA", modname);
 
-	  /* Find the target segment. */
-	  if (grub_target_to_host32 (s->sh_info) >= get_shnum (arch, e))
-	    grub_util_error ("%s: orphaned reloc section", modname);
-	  ts = get_shdr (arch, e, grub_target_to_host32 (s->sh_info), module_size);
-
-	  section_check_relocations (modname, arch, e, s, grub_target_to_host (ts->sh_size), module_size);
+	  section_check_relocations (modname, arch, e, s, module_size, min_addr, max_addr);
 	}
     }
 }
@@ -493,14 +504,14 @@ SUFFIX(grub_module_verify) (const char * const filename,
       || grub_target_to_host16 (e->e_machine) != arch->machine)
     grub_util_error ("%s: invalid arch-dependent ELF magic", filename);
 
-  if (grub_target_to_host16 (e->e_type) != ET_REL)
+  if (grub_target_to_host16 (e->e_type) != ET_DYN)
     {
       grub_util_error ("%s: this ELF file is not of the right type", filename);
     }
 
   /* Make sure that every section is within the core.  */
-  if (size < grub_target_to_host (e->e_shoff)
-      + (grub_uint32_t) grub_target_to_host16 (e->e_shentsize) * get_shnum (arch, e))
+  if (size < grub_target_to_host (e->e_phoff)
+      + (grub_uint32_t) grub_target_to_host16 (e->e_phentsize) * grub_target_to_host16 (e->e_phnum))
     {
       grub_util_error ("%s: ELF sections outside core", filename);
     }
@@ -516,6 +527,19 @@ SUFFIX(grub_module_verify) (const char * const filename,
 
   modname = (const char *) e + grub_target_to_host (s->sh_offset);
 
+  unsigned i;
+  grub_uint64_t min_addr = ~(grub_uint64_t)0;
+  grub_uint64_t max_addr = 0;
+
+  for (i = 0; i < grub_target_to_host16 (e->e_phnum); i++)
+    {
+      Elf_Phdr *p = get_phdr (arch, e, i);
+
+      min_addr = grub_min(min_addr, grub_target_to_host(p->p_vaddr));
+      max_addr = grub_max(max_addr, grub_target_to_host(p->p_vaddr) + grub_target_to_host(p->p_memsz));
+    }
+
+
   check_symbols(arch, e, modname, whitelist_empty, size);
-  check_relocations(modname, arch, e, size);
+  check_relocations(modname, arch, e, size, min_addr, max_addr);
 }
