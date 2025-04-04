@@ -23,6 +23,7 @@ infile=$2
 outfile=$4
 
 tmpfile=${outfile}.tmp
+tmpfile2=${outfile}.tmp2
 modname=`echo $infile | sed -e 's@\.module.*$@@'`
 
 if ! grep ^$modname: $moddep >/dev/null; then
@@ -33,7 +34,7 @@ fi
 deps=`grep ^$modname: $moddep | sed s@^.*:@@`
 
 # remove old files if any
-rm -f $tmpfile $outfile
+rm -f $tmpfile $tmpfile2 $outfile
 
 if test x@TARGET_APPLE_LINKER@ != x1; then
     # stripout .modname and .moddeps sections from input module
@@ -53,10 +54,8 @@ if test x@TARGET_APPLE_LINKER@ != x1; then
     fi
     rm -f $t1 $t2
 
-	if test x@platform@ != xemu; then
-	    @TARGET_STRIP@ --strip-unneeded \
-		-K grub_mod_init -K grub_mod_fini \
-		-K _grub_mod_init -K _grub_mod_fini \
+    if test x@platform@ != xemu; then
+	STRIP_FLAGS="--strip-unneeded \
 		-R .note.GNU-stack \
 		-R .note.gnu.gold-version \
 		-R .note.gnu.property \
@@ -65,13 +64,20 @@ if test x@TARGET_APPLE_LINKER@ != x1; then
 		-R .rel.gnu.build.attributes \
 		-R .rela.gnu.build.attributes \
 		-R .eh_frame -R .rela.eh_frame -R .rel.eh_frame \
-		-R .note -R .comment -R .ARM.exidx $tmpfile || exit 1
+		-R .note -R .comment -R .gnu.hash -R .ARM.exidx \
+		-R .symtab -R .strtab -R .shstrtab"
+	if test x@target_cpu@ != xmips && test x@target_cpu@ != xmipsel && test x@target_cpu@ != xia64; then
+	    STRIP_FLAGS="$STRIP_FLAGS -R .dynamic"
 	fi
+	@TARGET_STRIP@ $STRIP_FLAGS -s $tmpfile || exit 1
+    else
+	@TARGET_CC@ -Wl,--export-dynamic -o $tmpfile2 -shared -nostdlib $tmpfile
+	cp $tmpfile2 $tmpfile
+    fi
 	if ! test -z "${TARGET_OBJ2ELF}"; then
 	    "${TARGET_OBJ2ELF}" $tmpfile || exit 1
 	fi
 else
-    tmpfile2=${outfile}.tmp2
     t1=${outfile}.t1.c
     t2=${outfile}.t2.c
 

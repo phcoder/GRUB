@@ -41,7 +41,7 @@ grub_arch_dl_check_header (void *ehdr)
 /* Relocate symbols.  */
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+			       Elf_Shdr *s)
 {
   Elf64_Rela *rel, *max;
 
@@ -54,11 +54,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       Elf64_Xword *addr64;
       Elf64_Sym *sym;
 
-      if (seg->size < rel->r_offset)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
-      addr32 = (Elf64_Word *) ((char *) seg->addr + rel->r_offset);
+      addr32 = (Elf64_Word *) ((char *) mod->base + rel->r_offset - mod->min_addr);
       addr64 = (Elf64_Xword *) addr32;
       sym = (Elf64_Sym *) ((char *) mod->symtab
 			   + mod->symsize * ELF_R_SYM (rel->r_info));
@@ -66,7 +67,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       switch (ELF_R_TYPE (rel->r_info))
 	{
 	case R_X86_64_64:
-	  *addr64 += rel->r_addend + sym->st_value;
+	case R_X86_64_GLOB_DAT:
+	case R_X86_64_JUMP_SLOT:
+	  *addr64 = rel->r_addend + sym->st_value;
+	  break;
+
+	case R_X86_64_RELATIVE:
+	  *addr64 = (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
 	  break;
 
 	case R_X86_64_PC32:
@@ -74,7 +81,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	  {
 	    grub_int64_t value;
 	    value = ((grub_int32_t) *addr32) + rel->r_addend + sym->st_value -
-	      (Elf64_Xword) (grub_addr_t) seg->addr - rel->r_offset;
+	      (Elf64_Xword) (grub_addr_t) addr32;
 	    if (value != (grub_int32_t) value)
 	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation out of range");
 	    *addr32 = value;
@@ -84,7 +91,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	case R_X86_64_PC64:
 	  {
 	    *addr64 += rel->r_addend + sym->st_value -
-	      (Elf64_Xword) (grub_addr_t) seg->addr - rel->r_offset;
+	      (Elf64_Xword) (grub_addr_t) addr64;
 	  }
 	  break;
 
