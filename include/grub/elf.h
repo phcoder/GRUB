@@ -2540,6 +2540,8 @@ typedef Elf32_Addr Elf32_Conflict;
 /* LoongArch relocations */
 #define R_LARCH_NONE			      0
 #define R_LARCH_64			      2
+#define R_LARCH_RELATIVE		      3
+#define R_LARCH_JUMP_SLOT		      5
 #define R_LARCH_MARK_LA			      20
 #define R_LARCH_SOP_PUSH_PCREL		      22
 #define R_LARCH_SOP_PUSH_ABSOLUTE	      23
@@ -2581,6 +2583,7 @@ typedef Elf32_Addr Elf_Addr;
 typedef Elf32_Nhdr Elf_Nhdr;
 typedef Elf32_Ehdr Elf_Ehdr;
 typedef Elf32_Phdr Elf_Phdr;
+typedef Elf32_Dyn Elf_Dyn;
 typedef Elf32_Half Elf_Half;
 typedef Elf32_Off Elf_Off;
 typedef Elf32_Rel Elf_Rel;
@@ -2611,6 +2614,7 @@ typedef Elf64_Addr Elf_Addr;
 typedef Elf64_Nhdr Elf_Nhdr;
 typedef Elf64_Ehdr Elf_Ehdr;
 typedef Elf64_Phdr Elf_Phdr;
+typedef Elf64_Dyn Elf_Dyn;
 typedef Elf64_Half Elf_Half;
 typedef Elf64_Off Elf_Off;
 typedef Elf64_Rel Elf_Rel;

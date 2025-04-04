@@ -46,7 +46,7 @@ grub_arch_dl_check_header (void *ehdr)
  */
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+			       Elf_Shdr *s)
 {
   Elf_Rel *rel, *max;
   struct grub_loongarch64_stack stack;
@@ -61,9 +61,10 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       void *place;
       grub_uint64_t sym_addr;
 
-      if (rel->r_offset >= seg->size)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is outside the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
       sym = (Elf_Sym *) ((char*) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
@@ -72,10 +73,14 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       if (s->sh_type == SHT_RELA)
 	sym_addr += ((Elf_Rela *) rel)->r_addend;
 
-      place = (void *) ((grub_addr_t) seg->addr + rel->r_offset);
+      place = (void *) ((char *) mod->base + rel->r_offset - mod->min_addr);
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
+	case R_LARCH_JUMP_SLOT:
+	  *(grub_uint64_t *)place = sym_addr;
+	  break;
+
 	case R_LARCH_64:
 	  {
 	    grub_uint64_t *abs_place = place;
@@ -83,8 +88,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	    grub_dprintf ("dl", "reloc_abs64 %p => 0x%016llx, %p\n",
 			  place, (unsigned long long) sym_addr, abs_place);
 
-	    *abs_place += (grub_uint64_t) sym_addr;
+	    *abs_place = (grub_uint64_t) sym_addr;
 	  }
+	  break;
+	case R_LARCH_RELATIVE:
+	  *(grub_uint64_t *)place = (grub_addr_t) mod->base - mod->min_addr;
+	  if (s->sh_type == SHT_RELA)
+	    *(grub_uint64_t *)place += ((Elf_Rela *) rel)->r_addend;
 	  break;
 	case R_LARCH_MARK_LA:
 	  break;

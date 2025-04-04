@@ -51,7 +51,15 @@ endif
 endif
 
 CFLAGS_MODULE = $(CFLAGS_PLATFORM) -ffreestanding
-LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -Wl,-r
+if COND_emu
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib -Wl,-r
+else
+if COND_mips
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -shared
+else
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -shared -Wl,-Ttext-segment=0 -Wl,-Bstatic -Wl,-T${srcdir}/../conf/modules.sc
+endif
+endif
 CPPFLAGS_MODULE = $(CPPFLAGS_CPU) $(CPPFLAGS_PLATFORM)
 CCASFLAGS_MODULE = $(CCASFLAGS_CPU) $(CCASFLAGS_PLATFORM)
 
