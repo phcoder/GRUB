@@ -47,8 +47,7 @@ grub_arch_dl_check_header (void *ehdr)
 
 /* Relocate symbols.  */
 grub_err_t
-grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   Elf_Rela *rel, *max;
 
@@ -61,11 +60,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       Elf_Sym *sym;
       grub_uint64_t value;
 
-      if (seg->size < (rel->r_offset & ~3))
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
-      addr = (grub_addr_t) seg->addr + rel->r_offset;
+      addr = (grub_addr_t) ((char *) mod->base + rel->r_offset - mod->min_addr);
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
 
@@ -94,12 +94,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	    grub_ia64_add_value_to_slot_20b (addr, noff);
 	  }
 	  break;
-	case R_IA64_SEGREL64LSB:
-	  *(grub_uint64_t *) addr += value - (grub_addr_t) seg->addr;
-	  break;
 	case R_IA64_FPTR64LSB:
 	case R_IA64_DIR64LSB:
 	  *(grub_uint64_t *) addr += value;
+	  break;
+	case R_IA64_IPLTLSB:
+	case R_IA64_REL64LSB:
+	  *(grub_uint64_t *) addr = value;
 	  break;
 	case R_IA64_PCREL64LSB:
 	  *(grub_uint64_t *) addr += value - addr;

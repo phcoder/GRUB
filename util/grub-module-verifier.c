@@ -67,7 +67,6 @@ struct grub_module_verifier_arch archs[] = {
 			  for anything else, so assume that it always points to a
 			  function.
 		       */
-      R_IA64_SEGREL64LSB,
       R_IA64_FPTR64LSB,
       R_IA64_DIR64LSB,
       R_IA64_PCREL64LSB,
@@ -76,6 +75,8 @@ struct grub_module_verifier_arch archs[] = {
       R_IA64_GPREL64I,
       R_IA64_LTOFF_FPTR22,
       R_IA64_LDXMOV,
+      R_IA64_IPLTLSB,
+      R_IA64_REL64LSB,
       -1
     }, (int[]){
       R_IA64_GPREL22,
