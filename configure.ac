@@ -751,6 +751,7 @@ fi
 
 TARGET_RUST_TARGET_SHORT=
 TARGET_RUST_FLAGS=
+TARGET_RUST_ENABLED=yes
 case "x$target_cpu-$platform" in
      xarm-*)
 	TARGET_RUST_TARGET=armv5te-unknown-linux-gnueabi
@@ -784,7 +785,8 @@ case "x$target_cpu-$platform" in
         TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
         ;;
      *)
-        AC_MSG_ERROR([Rust is not supported yet for $target_cpu])
+        AC_MSG_WARN([Rust is not supported yet for $target_cpu])
+	TARGET_RUST_ENABLED=no
 	;;
 esac
 if test "x$TARGET_RUST_TARGET_SHORT" = x ; then
@@ -2266,6 +2268,8 @@ AM_CONDITIONAL([COND_HOST_WINDOWS], [test x$host_kernel = xwindows])
 AM_CONDITIONAL([COND_HOST_KFREEBSD], [test x$host_kernel = xkfreebsd])
 AM_CONDITIONAL([COND_HOST_XNU], [test x$host_kernel = xxnu])
 AM_CONDITIONAL([COND_HOST_ILLUMOS], [test x$host_kernel = xillumos])
+
+AM_CONDITIONAL([COND_rust], [test x$TARGET_RUST_ENABLED != xno])
 
 AM_CONDITIONAL([COND_MAN_PAGES], [test x$cross_compiling = xno -a x$HELP2MAN != x])
 AM_CONDITIONAL([COND_GRUB_EMU_SDL2], [test x$enable_grub_emu_sdl2 = xyes])

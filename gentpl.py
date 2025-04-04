@@ -714,6 +714,7 @@ def module(defn, platform):
 
 
 def rust_module(defn, platform):
+    output("if COND_rust\n")
     name = defn['name']
     rust_name = defn['rust_name']
     set_canonical_name_suffix(".module")
@@ -730,6 +731,7 @@ def rust_module(defn, platform):
 
     output(f"\n{rust_lib}: rust-compile\n")
     output(f"\n{grub_module}: {rust_lib}\n	cp $< $@\n")
+    output("endif\n")
 
 
 def kernel(defn, platform):
