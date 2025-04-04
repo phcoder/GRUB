@@ -33,13 +33,10 @@ grub_backtrace_print_address (void *addr)
 
   FOR_DL_MODULES (mod)
   {
-    grub_dl_segment_t segment;
-    for (segment = mod->segment; segment; segment = segment->next)
-      if (segment->addr <= addr && (grub_uint8_t *) segment->addr
-	  + segment->size > (grub_uint8_t *) addr)
+    if (mod->base <= addr && (grub_uint8_t *) mod->base + mod->sz > (grub_uint8_t *) addr)
 	{
-	  grub_printf ("%s.%x+%" PRIxGRUB_SIZE, mod->name, segment->section,
-		       (grub_size_t) ((grub_uint8_t *) addr - (grub_uint8_t *) segment->addr));
+	  grub_printf ("%s[0x%" PRIxGRUB_SIZE "]", mod->name,
+		       (grub_size_t) (mod->min_addr + ((grub_uint8_t *) addr - (grub_uint8_t *) mod->base)));
 	  return;
 	}
   }

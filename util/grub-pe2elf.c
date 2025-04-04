@@ -63,7 +63,8 @@ static int strtab_max, strtab_len;
 
 static Elf_Ehdr ehdr;
 static Elf_Shdr *shdr;
-static int num_sections, first_reloc_section, reloc_sections_end, symtab_section, strtab_section;
+static Elf_Phdr *phdr;
+static int num_sections, num_phdr, first_reloc_section, reloc_sections_end, symtab_section, strtab_section;
 static grub_uint32_t offset, image_base;
 
 static int
@@ -96,14 +97,18 @@ write_section_data (FILE* fp, const char *name, char *image,
   int *section_map;
   int i;
   grub_uint32_t last_category = 0;
-  grub_uint32_t idx, idx_reloc;
+  grub_uint32_t idx, idx_reloc, pidx;
+  grub_uint64_t cur_addr = 0;
+  grub_uint32_t cur_flags = 0;
   char *pe_strtab = (image + pe_chdr->symtab_offset
 		     + pe_chdr->num_symbols * sizeof (struct grub_pe32_symbol));
 
   section_map = xcalloc (2 * pe_chdr->num_sections + 5, sizeof (int));
   section_map[0] = 0;
   shdr = xcalloc (2 * pe_chdr->num_sections + 5, sizeof (shdr[0]));
+  phdr = xcalloc (pe_chdr->num_sections, sizeof (shdr[0]));
   idx = 1;
+  pidx = 0;
   idx_reloc = pe_chdr->num_sections + 1;
 
   for (i = 0; i < pe_chdr->num_sections; i++, pe_shdr++)
@@ -123,27 +128,32 @@ write_section_data (FILE* fp, const char *name, char *image,
       secsize = pe_shdr->raw_data_size;
 
       shdr[idx].sh_type = SHT_PROGBITS;
+      phdr[pidx].p_type = PT_LOAD;
 
       if (! strcmp (shname, ".text"))
         {
           category = 0;
           shdr[idx].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+	  phdr[pidx].p_flags = PF_R | PF_X;
         }
       else if (! strncmp (shname, ".rdata", 6))
         {
           category = 1;
           shdr[idx].sh_flags = SHF_ALLOC;
+	  phdr[pidx].p_flags = PF_R;
         }
       else if (! strcmp (shname, ".data"))
         {
           category = 2;
           shdr[idx].sh_flags = SHF_ALLOC | SHF_WRITE;
+	  phdr[pidx].p_flags = PF_R | PF_W;
         }
       else if (! strcmp (shname, ".bss"))
         {
           category = 3;
 	  shdr[idx].sh_type = SHT_NOBITS;
           shdr[idx].sh_flags = SHF_ALLOC | SHF_WRITE;
+	  phdr[pidx].p_flags = PF_R | PF_W;
 	  if (secsize < pe_shdr->virtual_size)
 	    secsize = pe_shdr->virtual_size;
         }
@@ -171,9 +181,47 @@ write_section_data (FILE* fp, const char *name, char *image,
                                       GRUB_PE32_SCN_ALIGN_MASK) - 1);
       shdr[idx].sh_addr = pe_shdr->virtual_address + image_base;
 
+      if (category != 4)
+	{
+	  grub_uint32_t align = 1 << (((pe_shdr->characteristics >>
+                                       GRUB_PE32_SCN_ALIGN_SHIFT) &
+                                      GRUB_PE32_SCN_ALIGN_MASK) - 1);
+
+	  if (pe_chdr->characteristics & GRUB_PE32_EXECUTABLE_IMAGE)
+	    {
+	      phdr[pidx].p_align = align;
+
+	      phdr[pidx].p_vaddr = shdr[idx].sh_addr;
+	      phdr[pidx].p_paddr = shdr[idx].sh_addr;
+	      phdr[pidx].p_memsz = secsize;
+	    }
+	  else
+	    {
+	      if (cur_flags != phdr[pidx].p_flags && align < 4096)
+		align = 4096;
+
+	      cur_flags = phdr[pidx].p_flags;
+
+	      phdr[pidx].p_align = align;
+	      cur_addr = (cur_addr + align - 1) & ~(align - 1);
+
+	      phdr[pidx].p_vaddr = cur_addr;
+	      phdr[pidx].p_paddr = cur_addr;
+	      phdr[pidx].p_memsz = secsize;
+	      shdr[idx].sh_addr = cur_addr;
+
+	      cur_addr += secsize;
+	    }
+	}
+
       if (shdr[idx].sh_type != SHT_NOBITS)
         {
           shdr[idx].sh_offset = offset;
+	  if (category != 4)
+	    {
+	      phdr[pidx].p_offset = offset;
+	      phdr[pidx].p_filesz = secsize;
+	    }
           grub_util_write_image_at (image + pe_shdr->raw_data_offset,
                                     pe_shdr->raw_data_size, offset, fp,
 				    shname);
@@ -198,10 +246,13 @@ write_section_data (FILE* fp, const char *name, char *image,
       else
         shdr[idx].sh_name = insert_string (shname);
       idx++;
+      if (category != 4)
+	pidx++;
     }
 
   idx_reloc -= pe_chdr->num_sections + 1;
   num_sections = idx + idx_reloc + 2;
+  num_phdr = pidx;
   first_reloc_section = idx;
   reloc_sections_end = idx + idx_reloc;
   memmove (shdr + idx, shdr + pe_chdr->num_sections + 1,
@@ -220,7 +271,8 @@ write_reloc_section (FILE* fp, const char *name, char *image,
                      struct grub_pe32_coff_header *pe_chdr,
                      struct grub_pe32_section_table  *pe_shdr,
                      Elf_Sym *symtab,
-                     int *symtab_map)
+                     int *symtab_map,
+		     int *section_map)
 {
   int i;
 
@@ -228,6 +280,7 @@ write_reloc_section (FILE* fp, const char *name, char *image,
     {
       struct grub_pe32_section_table *pe_sec;
       struct grub_pe32_reloc *pe_rel;
+      grub_uint64_t elf_load_offset = 0;
       elf_reloc_t *rel;
       int num_rels, j, modified;
 
@@ -236,17 +289,20 @@ write_reloc_section (FILE* fp, const char *name, char *image,
       rel = (elf_reloc_t *) xcalloc (pe_sec->num_relocations, sizeof (elf_reloc_t));
       num_rels = 0;
       modified = 0;
+      elf_load_offset = -pe_sec->virtual_address + shdr[section_map[shdr[i].sh_link + 1]].sh_addr;
 
       for (j = 0; j < pe_sec->num_relocations; j++, pe_rel++)
         {
           int type;
           grub_uint32_t ofs, *addr;
+	  grub_uint64_t elf_ofs;
 
           if ((pe_rel->symtab_index >= pe_chdr->num_symbols) ||
               (symtab_map[pe_rel->symtab_index] == -1))
             grub_util_error ("invalid symbol");
 
           ofs = pe_rel->offset - pe_sec->virtual_address;
+	  elf_ofs = pe_rel->offset + elf_load_offset;
           addr = (grub_uint32_t *)(image + pe_sec->raw_data_offset + ofs);
 
           switch (pe_rel->type)
@@ -283,7 +339,7 @@ write_reloc_section (FILE* fp, const char *name, char *image,
 	    }
 
           if (type ==
-#if GRUB_TARGET_WORDSIZE == 64
+#if GRUB_TARGET_WORDSIZE == 32
 	      R_386_PC32
 #else
 	      R_X86_64_PC32
@@ -306,7 +362,7 @@ write_reloc_section (FILE* fp, const char *name, char *image,
                 {
 		  modified = 1;
                   *addr += (symtab[symtab_map[pe_rel->symtab_index]].st_value
-			    - ofs - 4);
+			    - elf_ofs - 4);
 
                   continue;
                 }
@@ -321,9 +377,55 @@ write_reloc_section (FILE* fp, const char *name, char *image,
 		}
             }
 
-          rel[num_rels].r_offset = ofs;
-          rel[num_rels].r_info = ELF_R_INFO (symtab_map[pe_rel->symtab_index],
-					     type);
+	  grub_uint32_t symidx = symtab_map[pe_rel->symtab_index];
+
+	  if (symtab[symtab_map[pe_rel->symtab_index]].st_shndx != STN_UNDEF)
+	    {
+#if GRUB_TARGET_WORDSIZE == 64
+	      if (type == R_X86_64_PC32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  *addr += rel[num_rels].r_addend;
+		  modified = 1;
+		  continue;
+		}
+
+	      if (type == R_X86_64_PC64)
+		{
+		  *(grub_uint64_t *)addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  *(grub_uint64_t *)addr += rel[num_rels].r_addend;
+		  modified = 1;
+		  continue;
+		}
+
+	      if (type == R_X86_64_64)
+		{
+		  rel[num_rels].r_addend += *(grub_uint64_t *)addr;
+		  rel[num_rels].r_addend += symtab[symtab_map[pe_rel->symtab_index]].st_value;
+		  *(grub_uint64_t *)addr = 0;
+		  modified = 1;
+		  symidx = 0;
+		  type = R_X86_64_RELATIVE;
+		}
+#else
+	      if (type == R_386_PC32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  modified = 1;
+		  continue;
+		}
+	      if (type == R_386_32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value;
+		  modified = 1;
+		  symidx = 0;
+		  type = R_386_RELATIVE;
+		}
+#endif
+	    }
+
+          rel[num_rels].r_offset = elf_ofs;
+          rel[num_rels].r_info = ELF_R_INFO (symidx, type);
           num_rels++;
         }
 
@@ -424,7 +526,7 @@ write_symbol_table (FILE* fp, const char *name, char *image,
         }
 
       symtab[num_syms].st_shndx = section_map[pe_symtab->section];
-      symtab[num_syms].st_value = pe_symtab->value;
+      symtab[num_syms].st_value = pe_symtab->value + shdr[section_map[pe_symtab->section]].sh_addr;
       symtab[num_syms].st_info = ELF_ST_INFO (bind, type);
 
       symtab_map[i] = num_syms;
@@ -432,10 +534,10 @@ write_symbol_table (FILE* fp, const char *name, char *image,
     }
 
   write_reloc_section (fp, name, image, pe_chdr, pe_shdr,
-		       symtab, symtab_map);
+		       symtab, symtab_map, section_map);
 
   shdr[symtab_section].sh_name = insert_string (".symtab");
-  shdr[symtab_section].sh_type = SHT_SYMTAB;
+  shdr[symtab_section].sh_type = SHT_DYNSYM;
   shdr[symtab_section].sh_offset = offset;
   shdr[symtab_section].sh_size = num_syms * sizeof (Elf_Sym);
   shdr[symtab_section].sh_entsize = sizeof (Elf_Sym);
@@ -474,7 +576,7 @@ write_section_header (FILE *fp, const char *name)
   ehdr.e_ident[EI_MAG3] = ELFMAG3;
   ehdr.e_ident[EI_VERSION] = EV_CURRENT;
   ehdr.e_version = EV_CURRENT;
-  ehdr.e_type = ET_REL;
+  ehdr.e_type = ET_DYN;
 
 #if GRUB_TARGET_WORDSIZE == 64
   ehdr.e_ident[EI_CLASS] = ELFCLASS64;
@@ -492,6 +594,13 @@ write_section_header (FILE *fp, const char *name)
   ehdr.e_shoff = offset;
   ehdr.e_shnum = num_sections;
   grub_util_write_image_at (shdr, sizeof (Elf_Shdr) * num_sections,
+                            offset, fp, name);
+  offset += sizeof (Elf_Shdr) * num_sections;
+
+  ehdr.e_phentsize = sizeof (Elf_Phdr);
+  ehdr.e_phoff = offset;
+  ehdr.e_phnum = num_phdr;
+  grub_util_write_image_at (phdr, sizeof (Elf_Phdr) * num_phdr,
                             offset, fp, name);
 
   grub_util_write_image_at (&ehdr, sizeof (Elf_Ehdr), 0, fp, name);

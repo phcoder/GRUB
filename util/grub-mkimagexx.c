@@ -1410,8 +1410,10 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		     {
 		       grub_uint32_t hi20, lo12;
 
+#if defined(MKIMAGE_ELF64)
 		       if (off != (grub_int32_t)off)
 			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)((char *)target - (char *)e));
+#endif
 
 		       hi20 = (off + 0x800) & 0xfffff000;
 		       lo12 = (off - hi20) & 0xfff;
