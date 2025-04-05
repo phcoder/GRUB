@@ -26,9 +26,18 @@ FUNCTION(_start)
 	 * EFI_SYSTEM_TABLE and EFI_HANDLE are passed in $a1/$a0.
 	 */
 
-	la 		$a2, EXT_C(grub_efi_image_handle)
-	st.d		$a0, $a2, 0
-	la		$a2, EXT_C(grub_efi_system_table)
-	st.d		$a1, $a2, 0
+	pcalau12i       $r13,%got_pc_hi20(EXT_C(grub_efi_image_handle))
+	addi.d  	$r12,$r0,%got_pc_lo12(EXT_C(grub_efi_image_handle))
+	lu32i.d 	$r12,%got64_pc_lo20(EXT_C(grub_efi_image_handle))
+	lu52i.d 	$r12,$r12,%got64_pc_hi12(EXT_C(grub_efi_image_handle))
+	ldx.d   	$r12,$r13,$r12
+	st.d		$a0, $r12, 0
+
+	pcalau12i       $r13,%got_pc_hi20(EXT_C(grub_efi_system_table))
+	addi.d  	$r12,$r0,%got_pc_lo12(EXT_C(grub_efi_system_table))
+	lu32i.d 	$r12,%got64_pc_lo20(EXT_C(grub_efi_system_table))
+	lu52i.d 	$r12,$r12,%got64_pc_hi12(EXT_C(grub_efi_system_table))
+	ldx.d   	$r12,$r13,$r12
+	st.d		$a1, $r12, 0
 
 	b		EXT_C(grub_main)
