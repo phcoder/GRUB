@@ -25,10 +25,18 @@
         .globl  start, _start
         .code64
 
+#if defined(__MINGW32__) || defined(__CYGWIN__)
+#define EXT_GOT(x) .refptr. ## x
+#else
+#define EXT_GOT(x) x @ GOTPCREL
+#endif
+
 start:
 _start:
-	movq	%rcx, EXT_C(grub_efi_image_handle)(%rip)
-	movq	%rdx, EXT_C(grub_efi_system_table)(%rip)
+	movq	EXT_GOT(grub_efi_image_handle) (%rip), %rax
+	movq	%rcx, (%rax)
+	movq	EXT_GOT(grub_efi_system_table)(%rip), %rax
+	movq	%rdx, (%rax)
 
 	andq	$~0xf, %rsp
 	call	EXT_C(grub_main)
