@@ -877,9 +877,6 @@ if ( test "x$target_cpu" = xi386 || test "x$target_cpu" = xx86_64 ); then
 fi
 
 if test "x$target_cpu" = xloongarch64; then
-  TARGET_CFLAGS="$TARGET_CFLAGS -fno-plt"
-  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fno-plt"
-
   AC_CACHE_CHECK([for no-relax options], grub_cv_target_cc_mno_relax, [
     grub_cv_target_cc_mno_relax=no
     for cand in "-mno-relax" "-Wa,-mno-relax"; do
@@ -1437,7 +1434,8 @@ case $target_cpu-$platform in
 	   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 	fi
 	;;
-     riscv32-* | ia64-*)
+     # THose platforms require -fPIC in order to generate ET_DYN
+     riscv32-* | ia64-* | loongarch64-*)
         TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 	;;
      *)
