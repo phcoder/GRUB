@@ -30,12 +30,14 @@ struct grub_mkimage_layout
   size_t reloc_size;
   size_t align;
   grub_size_t ia64jmp_off;
-  grub_size_t tramp_off;
   grub_size_t got_off;
   grub_size_t got_size;
   unsigned ia64jmpnum;
   grub_uint32_t bss_start;
   grub_uint32_t end;
+  grub_int64_t vaddr_diff;
+  grub_int64_t off_diff;
+  grub_size_t dyn_pltoff;
 };
 
 /* Private header. Use only in mkimage-related sources.  */
