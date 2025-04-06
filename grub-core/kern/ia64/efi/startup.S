@@ -29,8 +29,11 @@
 _start:
 	alloc loc0=ar.pfs,2,4,0,0
 	mov loc1=rp
-	addl loc2=@gprel(grub_efi_image_handle),gp
-	addl loc3=@gprel(grub_efi_system_table),gp
+	addl loc2=@ltoffx(grub_efi_image_handle),r1
+	addl loc3=@ltoffx(grub_efi_system_table),r1
+	;;
+	ld8.mov loc2 = [loc2], grub_efi_image_handle
+	ld8.mov loc3 = [loc3], grub_efi_system_table
 	;;
 	st8 [loc2]=in0
 	st8 [loc3]=in1

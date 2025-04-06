@@ -74,8 +74,8 @@ cont:
 #endif
 
 	/* Move the modules out of BSS.  */
-	lui $t2, %hi(__bss_start)
-	addiu $t2, %lo(__bss_start)
+	lui $t2, %hi(_edata)
+	addiu $t2, %lo(_edata)
 	
 	lui $t1, %hi(_end)
 	addiu $t1, %lo(_end)

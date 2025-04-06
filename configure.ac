@@ -876,9 +876,6 @@ if ( test "x$target_cpu" = xi386 || test "x$target_cpu" = xx86_64 ); then
 fi
 
 if test "x$target_cpu" = xloongarch64; then
-  TARGET_CFLAGS="$TARGET_CFLAGS -fno-plt"
-  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fno-plt"
-
   AC_CACHE_CHECK([for no-relax options], grub_cv_target_cc_mno_relax, [
     grub_cv_target_cc_mno_relax=no
     for cand in "-mno-relax" "-Wa,-mno-relax"; do
@@ -1405,7 +1402,8 @@ case $target_cpu-$platform in
 	   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 	fi
 	;;
-     riscv32-* | ia64-*)
+     # THose platforms require -fPIC in order to generate ET_DYN
+     riscv32-* | ia64-* | loongarch64-*)
         TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
 	;;
      *)
@@ -2198,6 +2196,7 @@ AM_CONDITIONAL([COND_sparc64_ieee1275], [test x$target_cpu = xsparc64 -a x$platf
 AM_CONDITIONAL([COND_sparc64_emu], [test x$target_cpu = xsparc64 -a x$platform = xemu])
 AM_CONDITIONAL([COND_x86_64_efi], [test x$target_cpu = xx86_64 -a x$platform = xefi])
 AM_CONDITIONAL([COND_x86_64_xen], [test x$target_cpu = xx86_64 -a x$platform = xxen])
+AM_CONDITIONAL([COND_i386], [test x$target_cpu = xi386])
 
 AM_CONDITIONAL([COND_HOST_HURD], [test x$host_kernel = xhurd])
 AM_CONDITIONAL([COND_HOST_LINUX], [test x$host_kernel = xlinux])
