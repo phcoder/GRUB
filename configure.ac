@@ -958,9 +958,9 @@ if test x"$platform" != xemu ; then
 		         [grub_cv_target_cc_soft_float="-march=rv64imac_zicsr_zifencei -mabi=lp64"], [])
     fi
     if test "x$target_cpu" = xia64; then
-       CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
+       CFLAGS="$TARGET_CFLAGS -mno-inline-int-divide -mno-inline-float-divide -mno-inline-sqrt -Werror"
        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
-		         [grub_cv_target_cc_soft_float="-mno-inline-float-divide -mno-inline-sqrt"], [])
+		         [grub_cv_target_cc_soft_float="-mno-inline-int-divide -mno-inline-float-divide -mno-inline-sqrt"], [])
     fi
     if test "x$target_cpu" = xsh4; then
        CFLAGS="$TARGET_CFLAGS -m4-nofpu -Werror"

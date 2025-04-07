@@ -57,7 +57,7 @@ kernel = {
   x86_64_efi_ldflags       = '-shared';
   x86_64_efi_stripflags    = '--strip-unneeded -K start -R .note -R .comment -R .note.gnu.gold-version';
 
-  ia64_efi_cflags = '-fshort-wchar -fno-builtin -fpic -minline-int-divide-max-throughput';
+  ia64_efi_cflags = '-fshort-wchar -fno-builtin -fpic';
   ia64_efi_ldflags = '-shared';
   ia64_efi_stripflags = '--strip-unneeded -K start -R .note -R .comment -R .note.gnu.gold-version';
 
