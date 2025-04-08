@@ -277,9 +277,9 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
        i < e->e_phnum;
        i++, p = (const Elf_Phdr *)((const char *) p + e->e_phentsize))
     {
-#ifdef __mips__
+#if defined(__mips__) || defined(__ia64__)
       if (p->p_type == PT_DYNAMIC)
-	grub_arch_dl_parse_dynamic (mod, (Elf32_Dyn *) ((char *) e + p->p_offset), p->p_filesz);
+	grub_arch_dl_parse_dynamic (mod, (Elf_Dyn *) ((char *) e + p->p_offset), p->p_filesz);
 #endif
 
       if (p->p_type != PT_LOAD)
@@ -306,6 +306,38 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
   Elf_Sym *sym;
   const char *str;
   Elf_Word size, entsize;
+
+  /* On emu mod_init/mod_fini are not exported.  */
+#ifdef GRUB_MACHINE_EMU
+    for (i = 0, s = (Elf_Shdr *) ((char *) e + e->e_shoff);
+       i < e->e_shnum;
+       i++, s = (Elf_Shdr *) ((char *) s + e->e_shentsize))
+      if (s->sh_type == SHT_SYMTAB)
+	{
+	  Elf_Shdr *s2;
+	  sym = (Elf_Sym *) ((char *) e + s->sh_offset);
+	  size = s->sh_size;
+	  entsize = s->sh_entsize;
+
+	  s2 = (Elf_Shdr *) ((char *) e + e->e_shoff + e->e_shentsize * s->sh_link);
+	  str = (char *) e + s2->sh_offset;
+
+	  for (i = 0;
+	       i < size / entsize;
+	       i++, sym = (Elf_Sym *) ((char *) sym + entsize))
+	    {
+	      const char *name = str + sym->st_name;
+
+	      if (ELF_ST_TYPE (sym->st_info) == STT_FUNC)
+		{
+		  if (grub_strcmp (name, "grub_mod_init") == 0)
+		    mod->init = (void (*) (grub_dl_t)) (sym->st_value + (Elf_Addr) mod->base - mod->min_addr);
+		  else if (grub_strcmp (name, "grub_mod_fini") == 0)
+		    mod->fini = (void (*) (void)) (sym->st_value + (Elf_Addr) mod->base - mod->min_addr);
+		}
+	    }
+	}
+#endif
 
   for (i = 0, s = (Elf_Shdr *) ((char *) e + e->e_shoff);
        i < e->e_shnum;
@@ -374,7 +406,7 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 		  if (!desc)
 		    return grub_errno;
 		  desc[0] = (void *) sym->st_value;
-		  desc[1] = mod->base;
+		  desc[1] = (char *) mod->base + mod->pltgot;
 		  sym->st_value = (grub_addr_t) desc;
 		}
 #endif

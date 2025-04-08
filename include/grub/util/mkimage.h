@@ -38,6 +38,7 @@ struct grub_mkimage_layout
   grub_uint32_t end;
   grub_int64_t vaddr_diff;
   grub_int64_t off_diff;
+  grub_size_t dyn_pltoff;
 };
 
 /* Private header. Use only in mkimage-related sources.  */

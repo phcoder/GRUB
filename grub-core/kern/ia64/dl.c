@@ -43,6 +43,21 @@ grub_arch_dl_check_header (void *ehdr)
   return GRUB_ERR_NONE;
 }
 
+void
+grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf_Dyn *dyn, grub_size_t sz)
+{
+  unsigned i;
+  for (i = 0; i < sz / sizeof(dyn[0]); i++)
+    switch (dyn[i].d_tag)
+      {
+      case DT_PLTGOT:
+	mod->pltgot = dyn[i].d_un.d_ptr;
+	break;
+      case DT_NULL:
+	return;
+      }
+}
+
 #pragma GCC diagnostic ignored "-Wcast-align"
 
 /* Relocate symbols.  */
@@ -50,6 +65,7 @@ grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   Elf_Rela *rel, *max;
+  grub_addr_t gp = (grub_addr_t) mod->base + (grub_addr_t) mod->pltgot;
 
   for (rel = (Elf_Rela *) ((char *) ehdr + s->sh_offset),
 	 max = (Elf_Rela *) ((char *) rel + s->sh_size);
@@ -94,26 +110,28 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	    grub_ia64_add_value_to_slot_20b (addr, noff);
 	  }
 	  break;
+	case R_IA64_IPLTLSB:
+	  grub_memcpy((void *) addr, (void *) value, 16);
+	  break;
 	case R_IA64_FPTR64LSB:
 	case R_IA64_DIR64LSB:
-	  *(grub_uint64_t *) addr += value;
-	  break;
-	case R_IA64_IPLTLSB:
-	case R_IA64_REL64LSB:
 	  *(grub_uint64_t *) addr = value;
+	  break;
+	case R_IA64_REL64LSB:
+	  *(grub_uint64_t *) addr = (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
 	  break;
 	case R_IA64_PCREL64LSB:
 	  *(grub_uint64_t *) addr += value - addr;
 	  break;
 	case R_IA64_GPREL64I:
-	  grub_ia64_set_immu64 (addr, value - (grub_addr_t) mod->base);
+	  grub_ia64_set_immu64 (addr, value - gp);
 	  break;
 	case R_IA64_GPREL22:
-	  if ((value - (grub_addr_t) mod->base) & ~MASK20)
+	  if ((value - gp) & ~MASK20)
 	    return grub_error (GRUB_ERR_BAD_MODULE,
 			       "gprel offset too big (%lx)",
-			       value - (grub_addr_t) mod->base);
-	  grub_ia64_add_value_to_slot_21 (addr, value - (grub_addr_t) mod->base);
+			       value - gp);
+	  grub_ia64_add_value_to_slot_21 (addr, value - gp);
 	  break;
 
 	case R_IA64_LTOFF22X:
@@ -125,11 +143,11 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 	  {
 	    grub_uint64_t *gpptr = mod->gotptr;
 	    *gpptr = value;
-	    if (((grub_addr_t) gpptr - (grub_addr_t) mod->base) & ~MASK20)
+	    if (((grub_addr_t) gpptr - gp) & ~MASK20)
 	      return grub_error (GRUB_ERR_BAD_MODULE,
 				 "gprel offset too big (%lx)",
-				 (grub_addr_t) gpptr - (grub_addr_t) mod->base);
-	    grub_ia64_add_value_to_slot_21 (addr, (grub_addr_t) gpptr - (grub_addr_t) mod->base);
+				 (grub_addr_t) gpptr - gp);
+	    grub_ia64_add_value_to_slot_21 (addr, (grub_addr_t) gpptr - gp);
 	    mod->gotptr = gpptr + 1;
 	    break;
 	  }

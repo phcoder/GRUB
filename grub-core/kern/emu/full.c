@@ -39,13 +39,11 @@ grub_arch_dl_check_header (void *ehdr)
 }
 
 grub_err_t
-grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   (void) mod;
   (void) ehdr;
   (void) s;
-  (void) seg;
   return GRUB_ERR_BAD_MODULE;
 }
 

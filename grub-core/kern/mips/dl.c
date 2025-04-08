@@ -31,7 +31,7 @@ static char _gp_disp_dummy;
 
 
 void
-grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf32_Dyn *dyn, grub_size_t sz)
+grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf_Dyn *dyn, grub_size_t sz)
 {
   unsigned i;
   for (i = 0; i < sz / sizeof(dyn[0]); i++)

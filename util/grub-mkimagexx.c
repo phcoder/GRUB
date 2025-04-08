@@ -663,7 +663,7 @@ SUFFIX (relocate_symbols) (Elf_Ehdr *e, struct section_metadata *smd,
 	  *jptr = grub_host_to_target64 (sym->st_value);
 	  sym->st_value = (char *) jptr - (char *) jumpers + jumpers_addr;
 	  jptr++;
-	  *jptr = 0;
+	  *jptr = layout->vaddr_diff + layout->dyn_pltoff;
 	  jptr++;
 	}
       grub_util_info ("locating %s at 0x%"  GRUB_HOST_PRIxLONG_LONG, name,
@@ -1023,6 +1023,10 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  }
 		  break;
 
+		case R_IA64_REL64LSB:
+		  *target = grub_host_to_target64 (addend + layout->vaddr_diff);
+		  break;
+
 		case R_IA64_LTOFF22X:
 		case R_IA64_LTOFF22:
 		  {
@@ -1064,10 +1068,18 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  *target = grub_host_to_target64 (grub_target_to_host64 (*target)
 						   + addend + sym_addr - target_section_addr);
 		  break;
+		case R_IA64_IPLTLSB:
+		  memcpy(target, ((char *)pe_target + addend + sym_addr - image_target->vaddr_offset), 16);
+		  grub_util_info ("relocating an IPLT entry to 0x%"
+				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
+				  GRUB_HOST_PRIxLONG_LONG,
+				  (unsigned long long)
+				  grub_target_to_host64 (*target),
+				  (unsigned long long) offset);
+		  break;
 		case R_IA64_DIR64LSB:
 		case R_IA64_FPTR64LSB:
-		  *target = grub_host_to_target64 (grub_target_to_host64 (*target)
-						   + addend + sym_addr);
+		  *target = grub_host_to_target64 (addend + sym_addr);
 		  grub_util_info ("relocating a direct entry to 0x%"
 				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
 				  GRUB_HOST_PRIxLONG_LONG,
@@ -1451,8 +1463,10 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		     {
 		       grub_uint32_t hi20, lo12;
 
+#if defined(MKIMAGE_ELF64)
 		       if (off != (grub_int32_t)off)
 			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)((char *)target - (char *)e));
+#endif
 
 		       hi20 = (off + 0x800) & 0xfffff000;
 		       lo12 = (off - hi20) & 0xfff;
@@ -1765,8 +1779,31 @@ translate_relocation_pe (struct translate_context *ctx,
 	case R_IA64_SEGREL64LSB:
 	  break;
 
+	case R_IA64_IPLTLSB:
+#if 1
+	  {
+	    grub_util_info ("adding a relocation entry for 0x%"
+			    GRUB_HOST_PRIxLONG_LONG,
+			    (unsigned long long) addr);
+	    ctx->current_address
+	      = add_fixup_entry (&ctx->lst,
+				 GRUB_PE32_REL_BASED_DIR64,
+				 addr,
+				 0, ctx->current_address,
+				 image_target);
+	    ctx->current_address
+	      = add_fixup_entry (&ctx->lst,
+				 GRUB_PE32_REL_BASED_DIR64,
+				 addr + 8,
+				 0, ctx->current_address,
+				 image_target);
+	  }
+#endif
+	  break;
+
 	case R_IA64_FPTR64LSB:
 	case R_IA64_DIR64LSB:
+	case R_IA64_REL64LSB:
 #if 1
 	  {
 	    grub_util_info ("adding a relocation entry for 0x%"
@@ -2385,21 +2422,39 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
   for (i = 0, p = smd->phdrs;
        i < smd->num_phdrs;
        i++, p = (Elf_Phdr *) ((char *) p + smd->phdr_entsize))
-    if (grub_target_to_host32 (p->p_type) == PT_LOAD)
-      {
-	if (grub_target_to_host (p->p_vaddr) < min_vaddr)
-	  min_vaddr = grub_target_to_host (p->p_vaddr);
-	if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_vaddr)
-	  max_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
-	if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz) > max_filled_vaddr)
-	  max_filled_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz);
-	if ((grub_target_to_host32 (p->p_flags) & PF_X) && grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_execvaddr)
-	  max_execvaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
-	if ((grub_target_to_host32 (p->p_flags) & PF_W) && grub_target_to_host (p->p_vaddr) < min_wvaddr)
-	  min_wvaddr = grub_target_to_host (p->p_vaddr);
-	if (grub_target_to_host (p->p_align) > max_align)
-	  max_align = grub_target_to_host (p->p_align);
-      }
+    {
+      if (grub_target_to_host32 (p->p_type) == PT_LOAD)
+	{
+	  if (grub_target_to_host (p->p_vaddr) < min_vaddr)
+	    min_vaddr = grub_target_to_host (p->p_vaddr);
+	  if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_vaddr)
+	    max_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
+	  if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz) > max_filled_vaddr)
+	    max_filled_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz);
+	  if ((grub_target_to_host32 (p->p_flags) & PF_X) && grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_execvaddr)
+	    max_execvaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
+	  if ((grub_target_to_host32 (p->p_flags) & PF_W) && grub_target_to_host (p->p_vaddr) < min_wvaddr)
+	    min_wvaddr = grub_target_to_host (p->p_vaddr);
+	  if (grub_target_to_host (p->p_align) > max_align)
+	    max_align = grub_target_to_host (p->p_align);
+	}
+      if (grub_target_to_host32 (p->p_type) == PT_DYNAMIC)
+	{
+	  Elf64_Dyn *dyn = (Elf64_Dyn *) ((char *) e + grub_target_to_host (p->p_offset));
+	  grub_size_t sz = grub_target_to_host (p->p_filesz);
+	  unsigned j;
+	  for (j = 0; j < sz / sizeof(dyn[0]); j++)
+	    switch (dyn[j].d_tag)
+	      {
+	      case DT_PLTGOT:
+		layout->dyn_pltoff = dyn[j].d_un.d_ptr;
+		break;
+	      case DT_NULL:
+		goto end_dynamic;
+	      }
+	end_dynamic:;
+	}
+    }
 
   if (image_target->id == IMAGE_EFI)
     {

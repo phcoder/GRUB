@@ -39,6 +39,13 @@ asn1_allocate_and_read (asn1_node node, const char *name, void **content, grub_s
     return ASN1_MEM_ERROR;
 
   ret = asn1_read_value (node, name, NULL, &tmpstr_size);
+  if (ret == ASN1_SUCCESS)
+    {
+      *content = NULL;
+      *content_size = 0;
+
+      return ASN1_SUCCESS;
+    }
   if (ret != ASN1_MEM_ERROR)
     return ret;
 
