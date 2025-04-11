@@ -363,6 +363,8 @@ Fast FileSystem (AFFS)}, @dfn{AtheOS fs}, @dfn{BeFS},
 @dfn{BSD UFS/UFS2}, @dfn{XFS}, and @dfn{ZFS} (including lzjb, gzip,
 zle, mirror, stripe, raidz1/2/3 and encryption in AES-CCM and AES-GCM).
 @xref{Filesystem}, for more information.
+Note: Only a subset of filesystems are supported in lockdown mode (such
+as when secure boot is enabled, @pxref{Lockdown} for more information).
 
 @item Support automatic decompression
 Can decompress files which were compressed by @command{gzip} or
@@ -843,6 +845,8 @@ not use any additional partition maps to access @file{/boot}
    F2FS, HFS, uncompressed HFS+, ISO9660, JFS, Minix, Minix2, Minix3, NILFS2,
    NTFS, ReiserFS, ROMFS, SFS, tar, UDF, UFS1, UFS2, XFS
 @end itemize
+Note: Only a subset of filesystems are supported in lockdown mode (such
+as when secure boot is enabled, @pxref{Lockdown} for more information).
 
 MBR gap has few technical problems.  There is no way to reserve space in
 the embedding area with complete safety, and some proprietary software is
@@ -4198,10 +4202,14 @@ This is used as part of LZO decompression / compression.
 @node affs_module
 @section affs
 This module provides support for the Amiga Fast FileSystem (AFFS).
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node afs_module
 @section afs
 This module provides support for the AtheOS File System (AFS).
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node afsplitter_module
 @section afsplitter
@@ -4253,6 +4261,8 @@ to the terminal for the current call stack.
 @node bfs_module
 @section bfs
 This module provides support for the BeOS "Be File System" (BFS).
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node biosdisk_module
 @section biosdisk
@@ -4342,6 +4352,8 @@ content of a file to the terminal. Please @pxref{cat} for more info.
 @section cbfs
 This module provides support for the Coreboot File System (CBFS) which is an
 archive based file system.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node cbls_module
 @section cbls
@@ -4847,6 +4859,8 @@ contents of a file in hexadecimal. @xref{hexdump} for more information.
 @section hfs
 This module provides support for the Hierarchical File System (HFS) file system
 in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node hfsplus_module
 @section hfsplus
@@ -4887,6 +4901,8 @@ longer names)
 @node jfs_module
 @section jfs
 This module provides support for the Journaled File System (JFS) file system.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node jpeg_module
 @section jpeg
@@ -5108,6 +5124,8 @@ This module provides support for commands @command{read_byte},
 write data to physical memory (addresses). The "read" commands accept one
 parameter to specify the source address. The "write" commands require either two
 or three parameters, with the order: address, value, <optional mask>.
+Note: The commands provided by this module are not allowed when lockdown is
+enforced (@pxref{Lockdown}).
 
 @node memtools_module
 @section memtools
@@ -5121,30 +5139,44 @@ including: @command{cat}, @command{help}, @command{dump}, @command{rmmod},
 @command{lsmod}, and @command{exit}. The version of the commands in this module
 are similar to their full-fledged counterparts implemented in other GRUB
 modules.
+Note: The @command{dump} command is not allowed when lockdown is enforced
+(@pxref{Lockdown}).
 
 @node minix_module
 @section minix
 This module provides support for the Minix filesystem, version 1.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node minix2_module
 @section minix2
 This module provides support for the Minix filesystem, version 2.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node minix2_be_module
 @section minix2_be
 This module provides support for the Minix filesystem, version 2 big-endian.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node minix3_module
 @section minix3
 This module provides support for the Minix filesystem, version 3.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node minix3_be_module
 @section minix3_be
 This module provides support for the Minix filesystem, version 3 big-endian.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node minix_be_module
 @section minix_be
 This module provides support for the Minix filesystem, version 1 big-endian.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node mmap_module
 @section mmap
@@ -5278,6 +5310,8 @@ something like "ASCII cpio archive (SVR4 with CRC)"
 @section nilfs2
 This module provides support for the New Implementation of Log filesystem
 (nilfs2).
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node normal_module
 @section normal
@@ -5287,11 +5321,15 @@ more information.
 @node ntfs_module
 @section ntfs
 This module provides support for the New Technology File System (NTFS) in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node ntfscomp_module
 @section ntfscomp
 This module provides support for compression with the New Technology File
 System (NTFS) in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node ntldr_module
 @section ntldr
@@ -5517,6 +5555,8 @@ GRUB script wildcard translator. @xref{regexp} for more information.
 @node reiserfs_module
 @section reiserfs
 This module provides support for the ReiserFS File System in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node relocator_module
 @section relocator
@@ -5526,6 +5566,8 @@ to the expected memory location(s) and jumping to (invoking) the executable.
 @node romfs_module
 @section romfs
 This module provides support for the Read-Only Memory File System (ROMFS).
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node scsi_module
 @section scsi
@@ -5594,6 +5636,8 @@ values from / to specified PCI / PCIe devices.
 @node sfs_module
 @section sfs
 This module provides support for the Amiga Smart File System (SFS) in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node shift_test_module
 @section shift_test
@@ -5742,19 +5786,27 @@ information provided by a U-Boot bootloader.
 @section udf
 This module provides support for the Universal Disk Format (UDF) used on some
 newer optical disks.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node ufs1_module
 @section ufs1
 This module provides support for the Unix File System version 1 in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node ufs1_be_module
 @section ufs1_be
 This module provides support for the Unix File System version 1 (big-endian) in
 GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node ufs2_module
 @section ufs2
 This module provides support for the Unix File System version 2 in GRUB.
+Note: This module is not allowed in lockdown mode, @pxref{Lockdown} for more
+information.
 
 @node uhci_module
 @section uhci
@@ -6436,6 +6488,7 @@ you forget a command, you can run the command @command{help}
 * test::                        Check file types and compare values
 * tpm2_key_protector_init::     Initialize the TPM2 key protector
 * tpm2_key_protector_clear::    Clear the TPM2 key protector
+* tpm2_dump_pcr::               Dump TPM2 PCRs
 * true::                        Do nothing, successfully
 * trust::                       Add public key to list of trusted keys
 * unset::                       Unset an environment variable
@@ -7148,6 +7201,11 @@ to be shown.
 
 If given the special device named @samp{(mem)}, then the @samp{offset} given to
 @option{--skip} is treated as the address of a memory location to dump from.
+
+Note: The dumping of RAM memory (by the (mem) argument) is not allowed when
+when lockdown is enforced (@pxref{Lockdown}). The dumping of disk or file
+data is allowed when lockdown is enforced.
+
 @end deffn
 
 
@@ -7997,7 +8055,7 @@ either @var{expression1} or @var{expression2} is true
 @node tpm2_key_protector_init
 @subsection tpm2_key_protector_init
 
-@deffn Command tpm2_key_protector_init [@option{-m} mode] | [@option{-p} pcrlist] | [@option{-b} pcrbank] | [ [@option{-T} tpm2key_file] | [@option{-k} keyfile] ] | [@option{-s} handle] | [@option{-a} srk_type] | [@option{-n} nv_index]
+@deffn Command tpm2_key_protector_init [@option{--mode} | @option{-m} mode] | [@option{--pcrs} | @option{-p} pcrlist] | [@option{--bank} | @option{-b} pcrbank] | [ [@option{--tpm2key} | @option{-T} tpm2key_file] | [@option{--keyfile} | @option{-k} keyfile] ] | [@option{--srk} | @option{-s} handle] | [@option{--asymmetric} | @option{-a} srk_type] | [@option{--nvindex} | @option{-n} nv_index]
 Initialize the TPM2 key protector to unseal the key for the @command{cryptomount}
 (@pxref{cryptomount}) command. There are two supported modes,
 SRK(@kbd{srk}) and NV index(@kbd{nv}), to be specified by the option
@@ -8017,12 +8075,13 @@ options are @option{-T}, @option{-k}, @option{-a}, and @option{-s}. On the
 other hand, the NV index-specific option is @option{-n}.
 
 The key file for SRK mode can be supplied with either @option{-T} or
-@option{-k}. The @option{-T} option is for the path to the key file in
-TPM 2.0 Key File format. Since the parameters for the TPM commands are written
-in the file, there is no need to set the PCR list(@option{-p}) and
-bank(@option{-b}) when using the @option{-T} option. The @option{-k} option
-is for the key file in the raw format, and the @option{-p} and @option{-b}
-options are necessary for the non-default PCR list or bank. In general,
+@option{-k}. Those two options were used to distinguish the file formats but
+are same now. There are two supported file formats: raw format and TPM 2.0
+Key File format. When using the key file in the raw format, the @option{-p}
+and @option{-b} options are necessary for the non-default PCR list or bank.
+On the other hand, when using the key file in TPM 2.0 Key File format, the
+the parameters for the TPM commands are written in the file, and there is no
+need to set the PCR list(@option{-p}) and bank(@option{-b}). In general,
 TPM 2.0 Key File format is preferred due to the simplified GRUB command
 options and the authorized policy support
 
@@ -8045,6 +8104,18 @@ key and unseal it with the given PCR list and bank.
 
 @deffn Command tpm2_key_protector_clear
 Clear the TPM2 key protector if previously initialized.
+@end deffn
+
+@node tpm2_dump_pcr
+@subsection tpm2_dump_pcr
+
+@deffn Command tpm2_dump_pcr [@var{bank}]
+Print all PCRs of the specified TPM 2.0 @var{bank}. The supported banks are
+@samp{sha1}, @samp{sha256}, @samp{sha384}, and @samp{sha512}. If @var{bank}
+is not specified, @samp{sha256} is chosen by default.
+
+Since GRUB measures every command into PCR 8, invoking @command{tpm2_dump_pcr}
+also extends PCR 8, so PCR 8 will not be a stable value in GRUB shell.
 @end deffn
 
 @node true
@@ -8813,10 +8884,47 @@ platforms.
 
 The GRUB can be locked down when booted on a secure boot environment, for example
 if the UEFI secure boot is enabled. On a locked down configuration, the GRUB will
-be restricted and some operations/commands cannot be executed.
+be restricted and some operations/commands cannot be executed. This also includes
+limiting which filesystems are supported to those thought to be more robust and
+widely used within GRUB.
+
+The filesystems currently allowed in lockdown mode include:
+@itemize @bullet
+@item BtrFS
+@item cpio
+@item exFAT
+@item Enhanced Read-Only File System (EROFS)
+@item Linux ext2/ext3/ext4
+@item F2FS
+@item DOS FAT12/FAT16/FAT32
+@item HFS+
+@item ISO9660
+@item Squash4
+@item tar
+@item XFS
+@item ZFS
+@end itemize
+
+The filesystems currently not allowed in lockdown mode include:
+@itemize @bullet
+@item Amiga Fast FileSystem (AFFS)
+@item AtheOS File System (AFS)
+@item Bee File System (BFS)
+@item Coreboot File System (CBFS)
+@item Hierarchical File System (HFS)
+@item Journaled File System (JFS)
+@item Minix filesystem
+@item New Implementation of Log filesystem (nilfs2)
+@item Windows New Technology File System (NTFS)
+@item ReiserFS
+@item Read-Only Memory File System (ROMFS)
+@item Amiga Smart File System (SFS)
+@item Universal Disk Format (UDF)
+@item Unix File System (UFS)
+@end itemize
 
 The @samp{lockdown} variable is set to @samp{y} when the GRUB is locked down.
-Otherwise it does not exit.
+Otherwise it does not exist.
 
 @node TPM2 key protector
 @section TPM2 key protector in GRUB
@@ -9034,44 +9142,118 @@ When/After the shim or GRUB are updated, it only requires to run the last
 @subsection NV index mode
 
 Instead of storing the sealed key in a file, NV index mode uses the TPM
-non-volatile memory to store the sealed key.
+non-volatile memory to store the sealed key and could be useful when accessing
+the file is not possible.
 
-The following sample commands use tpm2-tools (@url{https://github.com/tpm2-software/tpm2-tools})
-commands to seal @file{luks.key} into the specific NV index: @kbd{0x81000000}.
+However, the Linux root user must be careful who she/he gives access to the
+TPM (tss group) since those users will also be able to modify the NV index
+that's holding the key.
 
-First, we need to create the object file for the primary key, i.e. storage
-root key (SRK) with the default key settings in GRUB: SHA256 hash algorithm
-and ECC key algorithm.
+There are two types of TPM handles supported by NV index mode: persistent
+handle and NV index handle.
 
-@example
-# @kbd{tpm2_createprimary -C o -g sha256 -G ecc -c primary.ctx}
-@end example
+@subsubsection Persistent handle
 
-The next commands collect the current values of PCR 0, 2, 4, and 7 and saves
-them in @file{pcr.dat}.
-
-@example
-# @kbd{tpm2_startauthsession -S session.dat}
-# @kbd{tpm2_policypcr -S session.dat -l sha256:0,2,4,7 -f pcrs.dat -L policy.dat}
-# @kbd{tpm2_flushcontext session.dat}
-@end example
-
-The last commands seal @file{luks.key} with the primary key and stores the
-result in @kbd{0x81000000}.
+The range of persistent handles is from @kbd{0x81000000} to @kbd{0x81FFFFFF}.
+The persistent handle is designed to make TPM objects persistent through
+power cycles, and only TPM objects, such as RSA or EC keys, are accepted.
+Thus, only the raw format is supported by persistent handles. The following
+shows the @command{grub-protect} command to seal the disk key @file{luks.key}
+into the persistent handle @kbd{0x81000000} with the PCRs @kbd{0,2,4,7}.
 
 @example
-# @kbd{cat luks.key | tpm2_create -C primary.ctx -u key.pub -r key.priv -L policy.dat -i-}
-# @kbd{tpm2_load -C primary.ctx -u key.pub -r key.priv -n sealing.name -c sealing.ctx}
-# @kbd{tpm2_evictcontrol -C o -c sealing.ctx 0x81000000}
+@group
+# @kbd{grub-protect \
+             --protector=tpm2 \
+             --action=add \
+             --tpm2-bank=sha256 \
+             --tpm2-pcrs=0,2,4,7 \
+             --tpm2-keyfile=luks.key \
+             --tpm2-nvindex=0x81000000}
+@end group
 @end example
 
-To unseal the key, we have to specify the mode @kbd{nv}, the NV index
+To unseal the key, we have to specify the mode @kbd{nv}, the persistent handle
 @kbd{0x81000000}, and the PCRs @kbd{0,2,4,7} for the @command{tpm2_key_protector_init}
 command.
 
 @example
 grub> @kbd{tpm2_key_protector_init --mode=nv --nvindex=0x81000000 --pcrs=0,2,4,7}
 grub> @kbd{cryptomount -u <UUID> --protector tpm2}
+@end example
+
+If the key in the persistent handle becomes unwanted, the following
+@command{grub-protect} command removes the specified persistent handle
+@kbd{0x81000000}.
+
+@example
+@group
+# @kbd{grub-protect \
+             --protector=tpm2 \
+             --action=remove \
+             --tpm2-evict \
+             --tpm2-nvindex=0x81000000}
+@end group
+@end example
+
+@subsubsection NV index handle
+
+The range of NV index handles is from @kbd{0x1000000} to @kbd{0x1FFFFFF}.
+Unlike the persistent handle, the NV index handle allows user-defined data,
+so it can easily support both the TPM 2.0 Key File format as well as the raw
+format.
+
+The following @kbd{grub-protect} command seals the disk key @file{luks.key}
+into the NV index handle @kbd{0x1000000} with the PCRs @kbd{0,2,4,7} while
+using the TPM 2.0 Key File format.
+
+@example
+@group
+# @kbd{grub-protect \
+             --protector=tpm2 \
+             --action=add \
+             --tpm2key \
+             --tpm2-bank=sha256 \
+             --tpm2-pcrs=0,2,4,7 \
+             --tpm2-keyfile=luks.key \
+             --tpm2-nvindex=0x1000000}
+@end group
+@end example
+
+Furthermore, it is also possible to insert an existing key file,
+@file{sealed.tpm}, into a specific NV index handle using the following
+tpm2-tools (@url{https://github.com/tpm2-software/tpm2-tools}) commands.
+
+@example
+@group
+# @kbd{tpm2_nvdefine -C o \
+             -a "ownerread|ownerwrite" \
+             -s $(stat -c %s sealed.tpm) \
+             0x1000000}
+@end group
+# @kbd{tpm2_nvwrite -C o -i sealed.tpm 0x1000000}
+@end example
+
+When unsealing the key in TPM 2.0 Key File format, only the mode @kbd{nv}
+and the NV index handle @kbd{0x1000000} have to be specified for the
+@command{tpm2_key_protector_init} command.
+
+@example
+grub> @kbd{tpm2_key_protector_init --mode=nv --nvindex=0x1000000}
+grub> @kbd{cryptomount -u <UUID> --protector tpm2}
+@end example
+
+The following @command{grub-protect} command allows to remove the specified
+NV index handle @kbd{0x1000000}.
+
+@example
+@group
+# @kbd{grub-protect \
+             --protector=tpm2 \
+             --action=remove \
+             --tpm2-evict \
+             --tpm2-nvindex=0x1000000}
+@end group
 @end example
 
 @subsection Setting up software TPM for EMU platform
@@ -10028,10 +10210,15 @@ unsealing. (default: @samp{7})
 @item --tpm2-srk=@var{handle}
 Set the SRK handle, e.g. @samp{0x81000000}, if the SRK is to be made persistent.
 
+@item --tpm2-nvindex=@var{handle}
+Set the handle, e.g. @samp{0x81000000} or @samp{0x1000000}, for NV index mode.
+
 @item --tpm2key
 Use TPM 2.0 Key File format.
 
 @end table
+
+@subsection 'Add' action
 
 Before sealing the key, please check the TPM PCR usage
 (@pxref{TPM2 key protector, TPM PCR usage}) to choose a proper set of PCRs.
@@ -10058,12 +10245,77 @@ grub> @kbd{tpm2_key_protector_init -T (hd0,gpt1)/efi/grub/sealed.tpm}
 grub> @kbd{cryptomount -u <UUID> -P tpm2}
 @end example
 
+Besides writing the PCR-sealed key into a file, @command{grub-protect} can
+write the sealed key into TPM non-volatile memory. Here is the
+@command{grub-protect} command to write the sealed key into the NV index
+handle @samp{0x1000000}.
+
+@example
+@group
+# @kbd{grub-protect --action=add \
+               --protector=tpm2 \
+               --tpm2-pcrs=0,2,4,7 \
+               --tpm2key \
+               --tpm2-keyfile=luks.key \
+               --tpm2-nvindex=0x1000000}
+@end group
+@end example
+
+Later, GRUB can fetch the key from @samp{0x1000000}.
+
+@example
+grub> @kbd{tpm2_key_protector_init --mode=nv --nvindex=0x1000000}
+grub> @kbd{cryptomount -u <UUID> -P tpm2}
+@end example
+
 In most of cases, the user only needs to create the key with the `add' action.
 If auto-unlocking is unwanted, just remove the file and the
 @command{tpm2_key_protector_init} command and invoke the @command{cryptomount}
 command without @kbd{-P tpm2}.
 
-The only use case for the `remove' action is when the SRK is made persistent.
+@subsection 'Remove' action
+
+The `remove' action is used to remove the handles for NV index mode and the
+persistent SRK.
+
+@subsubsection Handles for NV index mode
+
+There are two types of TPM handles supported by NV index mode: persistent
+handles and NV index handles, and @command{tpm2_getcap} can be used to
+check the existing handles.
+
+To display the list of existing persistent handles:
+
+@example
+@group
+# @kbd{tpm2_getcap handles-persistent}
+- 0x81000000
+@end group
+@end example
+
+Similarly, to display the list of existing NV index handles:
+
+@example
+@group
+# @kbd{tpm2_getcap handles-nv-index}
+- 0x1000000
+@end group
+@end example
+
+If the sealed key at an NV index handle is not needed anymore, the user can
+remove the handle with @kbd{--tpm2-nvindex} and @kbd{--tpm2-evict}. For
+example, this command removes the data from NV index @samp{0x1000000}:
+
+@example
+@group
+# @kbd{grub-protect --action=remove \
+               --protector=tpm2 \
+               --tpm2-evict \
+               --tpm2-nvindex 0x1000000} \
+@end group
+@end example
+
+@subsubsection Persistent SRK
 
 There are two supported SRKs in @command{grub-protect}: @samp{RSA} and @samp{ECC}.
 Due to slower key generation, some users of the @samp{RSA} SRK may prefer

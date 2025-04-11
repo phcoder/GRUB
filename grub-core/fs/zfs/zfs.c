@@ -1325,8 +1325,10 @@ check_pool_label (struct grub_zfs_data *data,
   ZIO_SET_CHECKSUM(&emptycksum, grub_cpu_to_zfs64(diskdesc->vdev_phys_sector << 9, endian), 0, 0, 0);
   err = zio_checksum_verify (emptycksum, ZIO_CHECKSUM_LABEL, endian,
 			     nvlist, VDEV_PHYS_SIZE, 0);
-  if (err)
+  if (err) {
+    grub_free (nvlist);
     return err;
+  }
 
   grub_dprintf ("zfs", "check 2 passed\n");
 
@@ -1412,8 +1414,10 @@ check_pool_label (struct grub_zfs_data *data,
   if (original)
     data->guid = poolguid;
 
-  if (data->guid != poolguid)
+  if (data->guid != poolguid) {
+    grub_free (nvlist);
     return grub_error (GRUB_ERR_BAD_FS, "another zpool");
+  }
 
   {
     char *nv;
@@ -1454,9 +1458,12 @@ check_pool_label (struct grub_zfs_data *data,
 	    {
 	      grub_dprintf("zfs","feature missing in check_pool_label:%s\n",name);
 	      err= grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET," check_pool_label missing feature '%s' for read",name);
+	      grub_free(features);
+	      grub_free(nvlist);
 	      return err;
 	    }
 	}
+      grub_free(features);
     }
   grub_dprintf ("zfs", "check 12 passed (feature flags)\n");
   grub_free (nvlist);
@@ -3117,6 +3124,7 @@ zap_lookup (dnode_phys_t * zap_dnode, const char *name, grub_uint64_t *val,
       return err;
     }
 
+  grub_free (zapbuf);
   return grub_error (GRUB_ERR_BAD_FS, "unknown ZAP type");
 }
 
@@ -3186,6 +3194,7 @@ zap_iterate_u64 (dnode_phys_t * zap_dnode,
       grub_free (zapbuf);
       return ret;
     }
+  grub_free (zapbuf);
   grub_error (GRUB_ERR_BAD_FS, "unknown ZAP type");
   return 0;
 }
@@ -3215,6 +3224,7 @@ zap_iterate (dnode_phys_t * zap_dnode,
   if (block_type == ZBT_MICRO)
     {
       grub_error (GRUB_ERR_BAD_FS, "micro ZAP where FAT ZAP expected");
+      grub_free (zapbuf);
       return 0;
     }
   if (block_type == ZBT_HEADER)
@@ -3226,6 +3236,7 @@ zap_iterate (dnode_phys_t * zap_dnode,
       grub_free (zapbuf);
       return ret;
     }
+  grub_free (zapbuf);
   grub_error (GRUB_ERR_BAD_FS, "unknown ZAP type");
   return 0;
 }
@@ -4011,6 +4022,8 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
       if (err)
 	{
 	  grub_dprintf ("zfs", "failed here\n");
+	  grub_free (fsname);
+	  grub_free (snapname);
 	  return err;
 	}
 
@@ -4047,8 +4060,11 @@ dnode_get_fullpath (const char *fullpath, struct subvolume *subvol,
       if (!err)
 	err = dnode_get (&(data->mos), headobj, 0,
 			 &subvol->mdn, data);
-      if (!err && subvol->mdn.dn_type != DMU_OT_DSL_DATASET && subvol->mdn.dn_bonustype != DMU_OT_DSL_DATASET)
+      if (!err && subvol->mdn.dn_type != DMU_OT_DSL_DATASET && subvol->mdn.dn_bonustype != DMU_OT_DSL_DATASET) {
+	grub_free (fsname);
+	grub_free (snapname);
 	return grub_error(GRUB_ERR_BAD_FS, "incorrect dataset dnode type");
+      }
 
       if (err)
 	{
@@ -4976,7 +4992,7 @@ static grub_err_t
 check_mos_features(dnode_phys_t *mosmdn_phys, struct grub_zfs_data* data )
 {
   grub_uint64_t objnum;
-  grub_err_t errnum = 0;
+  grub_err_t errnum = 0, ret = 0;
   dnode_phys_t dn,mosmdn;
   mzap_phys_t* mzp;
   int size;
@@ -5004,7 +5020,9 @@ check_mos_features(dnode_phys_t *mosmdn_phys, struct grub_zfs_data* data )
     return errnum;
 
   size = dn.dn_datablkszsec << SPA_MINBLOCKSHIFT;
-  return mzap_iterate (mzp, size, check_feature,NULL);
+  ret = mzap_iterate (mzp, size, check_feature,NULL);
+  grub_free(mzp);
+  return ret;
 }
 
 
