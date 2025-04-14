@@ -67,7 +67,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       switch (ELF_R_TYPE (rel->r_info))
 	{
 	case R_X86_64_64:
-	  *addr64 += rel->r_addend + sym->st_value;
+	case R_X86_64_GLOB_DAT:
+	case R_X86_64_JUMP_SLOT:
+	  *addr64 = rel->r_addend + sym->st_value;
+	  break;
+
+	case R_X86_64_RELATIVE:
+	  *addr64 = (grub_addr_t) mod->base - mod->min_addr + rel->r_addend;
 	  break;
 
 	case R_X86_64_RELATIVE:

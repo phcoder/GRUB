@@ -19,6 +19,8 @@ struct grub_module_verifier_arch archs[] = {
       R_X86_64_64,
       R_X86_64_PC64,
       R_X86_64_RELATIVE,
+      R_X86_64_GLOB_DAT,
+      R_X86_64_JUMP_SLOT,
       /* R_X86_64_32, R_X86_64_32S are supported but shouldn't be used because of their limited range.  */
       -1
     }, (int[]){
@@ -34,6 +36,8 @@ struct grub_module_verifier_arch archs[] = {
       GRUB_ELF_R_PPC_ADDR32,
       GRUB_ELF_R_PPC_REL32,
       GRUB_ELF_R_PPC_PLTREL24,
+      GRUB_ELF_R_PPC_RELATIVE,
+      GRUB_ELF_R_PPC_JMP_SLOT,
       -1
     } },
   { "sparc64", 8, 1, EM_SPARCV9, GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
@@ -50,6 +54,9 @@ struct grub_module_verifier_arch archs[] = {
 	 usually. */
       R_SPARC_HI22,
       R_SPARC_32,
+      R_SPARC_RELATIVE,
+      R_SPARC_GLOB_DAT,
+      R_SPARC_JMP_SLOT,
       -1
     } },
   { "ia64", 8, 0, EM_IA_64, GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
@@ -60,7 +67,6 @@ struct grub_module_verifier_arch archs[] = {
 			  for anything else, so assume that it always points to a
 			  function.
 		       */
-      R_IA64_SEGREL64LSB,
       R_IA64_FPTR64LSB,
       R_IA64_DIR64LSB,
       R_IA64_PCREL64LSB,
@@ -69,12 +75,16 @@ struct grub_module_verifier_arch archs[] = {
       R_IA64_GPREL64I,
       R_IA64_LTOFF_FPTR22,
       R_IA64_LDXMOV,
+      R_IA64_IPLTLSB,
+      R_IA64_REL64LSB,
       -1
     }, (int[]){
       R_IA64_GPREL22,
       -1
     } },
   { "mipsel", 4, 0, EM_MIPS, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
+      R_MIPS_NONE,
+      R_MIPS_REL32,
       R_MIPS_HI16,
       R_MIPS_LO16,
       R_MIPS_32,
@@ -86,6 +96,8 @@ struct grub_module_verifier_arch archs[] = {
       -1
     } },
   { "mips", 4, 1, EM_MIPS, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
+      R_MIPS_NONE,
+      R_MIPS_REL32,
       R_MIPS_HI16,
       R_MIPS_LO16,
       R_MIPS_32,
@@ -107,6 +119,9 @@ struct grub_module_verifier_arch archs[] = {
       R_ARM_THM_MOVW_ABS_NC,
       R_ARM_THM_MOVT_ABS,
       R_ARM_THM_JUMP19,
+      R_ARM_RELATIVE,
+      R_ARM_JUMP_SLOT,
+      R_ARM_GLOB_DAT,
       -1
     } },
   { "arm64", 8, 0, EM_AARCH64, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
@@ -115,6 +130,9 @@ struct grub_module_verifier_arch archs[] = {
       R_AARCH64_JUMP26,
       R_AARCH64_ADR_GOT_PAGE,
       R_AARCH64_LD64_GOT_LO12_NC,
+      R_AARCH64_RELATIVE,
+      R_AARCH64_JUMP_SLOT,
+      R_AARCH64_GLOB_DAT,
       -1
     }, (int[]){
       R_AARCH64_ADR_PREL_PG_HI21,
@@ -126,6 +144,8 @@ struct grub_module_verifier_arch archs[] = {
   { "loongarch64", 8, 0, EM_LOONGARCH, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
       R_LARCH_NONE,
       R_LARCH_64,
+      R_LARCH_RELATIVE,
+      R_LARCH_JUMP_SLOT,
       R_LARCH_MARK_LA,
       R_LARCH_SOP_PUSH_PCREL,
       R_LARCH_SOP_PUSH_ABSOLUTE,
@@ -182,6 +202,8 @@ struct grub_module_verifier_arch archs[] = {
       R_RISCV_RELAX,
       R_RISCV_RVC_BRANCH,
       R_RISCV_RVC_JUMP,
+      R_RISCV_RELATIVE,
+      R_RISCV_JUMP_SLOT,
       -1
     } },
   { "riscv64", 8, 0, EM_RISCV, GRUB_MODULE_VERIFY_SUPPORTS_REL | GRUB_MODULE_VERIFY_SUPPORTS_RELA, (int[]){
@@ -210,6 +232,8 @@ struct grub_module_verifier_arch archs[] = {
       R_RISCV_RELAX,
       R_RISCV_RVC_BRANCH,
       R_RISCV_RVC_JUMP,
+      R_RISCV_RELATIVE,
+      R_RISCV_JUMP_SLOT,
       -1
     }
   },

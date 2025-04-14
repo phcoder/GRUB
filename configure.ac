@@ -872,17 +872,6 @@ if ( test "x$target_cpu" = xi386 || test "x$target_cpu" = xx86_64 ); then
 fi
 
 if test "x$target_cpu" = xloongarch64; then
-  AC_CACHE_CHECK([whether _mno_explicit_relocs works], [grub_cv_cc_mno_explicit_relocs], [
-    CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -Werror"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
-	[grub_cv_cc_mno_explicit_relocs=yes],
-	[grub_cv_cc_mno_explicit_relocs=no])
-  ])
-  if test "x$grub_cv_cc_mno_explicit_relocs" = xyes; then
-    TARGET_CFLAGS="$TARGET_CFLAGS -mno-explicit-relocs -fno-plt"
-    TARGET_CCASFLAGS="$TARGET_CCASFLAGS -mno-explicit-relocs -fno-plt"
-  fi
-
   AC_CACHE_CHECK([for no-relax options], grub_cv_target_cc_mno_relax, [
     grub_cv_target_cc_mno_relax=no
     for cand in "-mno-relax" "-Wa,-mno-relax"; do
@@ -965,9 +954,9 @@ if test x"$platform" != xemu ; then
 		         [grub_cv_target_cc_soft_float="-march=rv64imac_zicsr_zifencei -mabi=lp64"], [])
     fi
     if test "x$target_cpu" = xia64; then
-       CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
+       CFLAGS="$TARGET_CFLAGS -mno-inline-int-divide -mno-inline-float-divide -mno-inline-sqrt -Werror"
        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
-		         [grub_cv_target_cc_soft_float="-mno-inline-float-divide -mno-inline-sqrt"], [])
+		         [grub_cv_target_cc_soft_float="-mno-inline-int-divide -mno-inline-float-divide -mno-inline-sqrt"], [])
     fi
     if test "x$target_cpu" = xsh4; then
        CFLAGS="$TARGET_CFLAGS -m4-nofpu -Werror"
@@ -1236,7 +1225,7 @@ else
   TARGET_IMG_CFLAGS=
 fi
 
-if test x${platform} = xefi; then
+if test x${platform} = xefi || test x${platform} = xemu; then
   TARGET_LDFLAGS_OLDMAGIC=
 fi
 
@@ -1420,18 +1409,28 @@ grub_CHECK_PIC
 [# On most platforms we don't want PIC as it only makes relocations harder
 # and code less efficient. On mips we want to have one got table per module
 # and reload $gp in every function.
-# GCC implements it using symbol __gnu_local_gp in non-PIC as well.
-# However with clang we need PIC for this reloading to happen.
 # With arm64 we need relocations that are in some way representable in
 # PE as we need to support arm64-efi. Without -fPIC clang generates
 # movk's which aren't representable.
 # Since default varies across dictributions use either -fPIC or -fno-PIC
 # explicitly.
-if ( test x$target_cpu = xmips || test x$target_cpu = xmipsel || test x$target_cpu = xarm64 ) && test "x$grub_cv_cc_target_clang" = xyes ; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
-elif [ x"$pic_possible" = xyes ]; then
-   TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
-fi]
+case $target_cpu-$platform in
+     mips-* | mipsel-*)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fPIC -mabicalls"
+	;;
+     arm64-*)
+	if test "x$grub_cv_cc_target_clang" = xyes ; then
+	   TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
+	fi
+	;;
+     # THose platforms require -fPIC in order to generate ET_DYN
+     riscv32-* | ia64-* | loongarch64-*)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fPIC"
+	;;
+     *)
+        TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIC"
+	;;
+esac]
 
 CFLAGS="$TARGET_CFLAGS"
 
@@ -2218,6 +2217,7 @@ AM_CONDITIONAL([COND_sparc64_ieee1275], [test x$target_cpu = xsparc64 -a x$platf
 AM_CONDITIONAL([COND_sparc64_emu], [test x$target_cpu = xsparc64 -a x$platform = xemu])
 AM_CONDITIONAL([COND_x86_64_efi], [test x$target_cpu = xx86_64 -a x$platform = xefi])
 AM_CONDITIONAL([COND_x86_64_xen], [test x$target_cpu = xx86_64 -a x$platform = xxen])
+AM_CONDITIONAL([COND_i386], [test x$target_cpu = xi386])
 
 AM_CONDITIONAL([COND_HOST_HURD], [test x$host_kernel = xhurd])
 AM_CONDITIONAL([COND_HOST_LINUX], [test x$host_kernel = xlinux])

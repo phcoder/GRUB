@@ -26,9 +26,9 @@ FUNCTION(_start)
 	 * EFI_SYSTEM_TABLE and EFI_HANDLE are passed in $a1/$a0.
 	 */
 
-	la 		$a2, EXT_C(grub_efi_image_handle)
+	la.pcrel	$a2, EXT_C(grub_efi_image_handle)
 	st.d		$a0, $a2, 0
-	la		$a2, EXT_C(grub_efi_system_table)
+	la.pcrel	$a2, EXT_C(grub_efi_system_table)
 	st.d		$a1, $a2, 0
 
 	b		EXT_C(grub_main)

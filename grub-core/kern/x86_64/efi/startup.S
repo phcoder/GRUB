@@ -27,8 +27,10 @@
 
 start:
 _start:
-	movq	%rcx, EXT_C(grub_efi_image_handle)(%rip)
-	movq	%rdx, EXT_C(grub_efi_system_table)(%rip)
+	movq	EXT_C(grub_efi_image_handle)@GOTPCREL(%rip), %rax
+	movq	%rcx, (%rax)
+	movq	EXT_C(grub_efi_system_table)@GOTPCREL(%rip), %rax
+	movq	%rdx, (%rax)
 
 	andq	$~0xf, %rsp
 	call	EXT_C(grub_main)

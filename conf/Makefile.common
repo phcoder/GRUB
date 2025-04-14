@@ -41,7 +41,7 @@ CFLAGS_KERNEL = $(CFLAGS_PLATFORM) -ffreestanding
 LDFLAGS_KERNEL = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC)
 CPPFLAGS_KERNEL = $(CPPFLAGS_CPU) $(CPPFLAGS_PLATFORM) -DGRUB_KERNEL=1
 CCASFLAGS_KERNEL = $(CCASFLAGS_CPU) $(CCASFLAGS_PLATFORM)
-STRIPFLAGS_KERNEL = -R .rel.dyn -R .reginfo -R .note -R .comment -R .drectve -R .note.gnu.gold-version -R .MIPS.abiflags -R .ARM.exidx
+STRIPFLAGS_KERNEL = -R .reginfo -R .note -R .comment -R .drectve -R .note.gnu.gold-version -R .MIPS.abiflags -R .ARM.exidx
 if !COND_emu
 if COND_HAVE_ASM_USCORE
   LDFLAGS_KERNEL += -Wl,--defsym=_malloc=_grub_malloc -Wl,--defsym=_free=_grub_free
@@ -51,7 +51,15 @@ endif
 endif
 
 CFLAGS_MODULE = $(CFLAGS_PLATFORM) -ffreestanding
-LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -shared -Wl,-Ttext-segment=0 -Wl,-Bstatic
+if COND_emu
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib -Wl,-r
+else
+if COND_i386
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -shared -Wl,-Ttext-segment=0 -Wl,-Bstatic -Wl,-T${srcdir}/../conf/i386-modules.sc
+else
+LDFLAGS_MODULE = $(LDFLAGS_PLATFORM) -nostdlib $(TARGET_LDFLAGS_OLDMAGIC) -shared
+endif
+endif
 CPPFLAGS_MODULE = $(CPPFLAGS_CPU) $(CPPFLAGS_PLATFORM)
 CCASFLAGS_MODULE = $(CCASFLAGS_CPU) $(CCASFLAGS_PLATFORM)
 

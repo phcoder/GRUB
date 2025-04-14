@@ -251,11 +251,11 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
   err = grub_arch_dl_get_tramp_got_size (e, &tramp, &got);
   if (err)
     return err;
-  tramp_align = grub_max (GRUB_ARCH_DL_TRAMP_ALIGN, arch_addralign);
+  tramp_align = grub_max (GRUB_ARCH_DL_TRAMP_ALIGN, DL_ALIGN);
   tramp_addr = ALIGN_UP (max_addr, tramp_align);
   max_addr = ALIGN_UP (tramp_addr+tramp, tramp_align);
   talign = grub_max (talign, tramp_align);
-  got_align = grub_max (GRUB_ARCH_DL_GOT_ALIGN, arch_addralign);
+  got_align = grub_max (GRUB_ARCH_DL_GOT_ALIGN, DL_ALIGN);
   got_addr = ALIGN_UP(max_addr, got_align);
   max_addr = ALIGN_UP(got_addr + got, got_align);
   talign = grub_max (talign, got_align);
@@ -277,6 +277,11 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
        i < e->e_phnum;
        i++, p = (const Elf_Phdr *)((const char *) p + e->e_phentsize))
     {
+#if defined(__mips__) || defined(__ia64__)
+      if (p->p_type == PT_DYNAMIC)
+	grub_arch_dl_parse_dynamic (mod, (Elf_Dyn *) ((char *) e + p->p_offset), p->p_filesz);
+#endif
+
       if (p->p_type != PT_LOAD)
 	continue;
 
@@ -286,8 +291,8 @@ grub_dl_load_segments (grub_dl_t mod, const Elf_Ehdr *e)
     }
 #if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv) && \
   !defined (__loongarch__)
-  mod->trampptr = mod->tramp = (char *) (mod->base + tramp_addr - mod->min_addr);
-  mod->gotptr = mod->got = (char *) (mod->base + got_addr - mod->min_addr);
+  mod->trampptr = mod->tramp = (char *) mod->base + (tramp_addr - mod->min_addr);
+  mod->gotptr = mod->got = (char *) mod->base + (got_addr - mod->min_addr);
 #endif
 
   return GRUB_ERR_NONE;
@@ -301,6 +306,38 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
   Elf_Sym *sym;
   const char *str;
   Elf_Word size, entsize;
+
+  /* On emu mod_init/mod_fini are not exported.  */
+#ifdef GRUB_MACHINE_EMU
+    for (i = 0, s = (Elf_Shdr *) ((char *) e + e->e_shoff);
+       i < e->e_shnum;
+       i++, s = (Elf_Shdr *) ((char *) s + e->e_shentsize))
+      if (s->sh_type == SHT_SYMTAB)
+	{
+	  Elf_Shdr *s2;
+	  sym = (Elf_Sym *) ((char *) e + s->sh_offset);
+	  size = s->sh_size;
+	  entsize = s->sh_entsize;
+
+	  s2 = (Elf_Shdr *) ((char *) e + e->e_shoff + e->e_shentsize * s->sh_link);
+	  str = (char *) e + s2->sh_offset;
+
+	  for (i = 0;
+	       i < size / entsize;
+	       i++, sym = (Elf_Sym *) ((char *) sym + entsize))
+	    {
+	      const char *name = str + sym->st_name;
+
+	      if (ELF_ST_TYPE (sym->st_info) == STT_FUNC)
+		{
+		  if (grub_strcmp (name, "grub_mod_init") == 0)
+		    mod->init = (void (*) (grub_dl_t)) (sym->st_value + (Elf_Addr) mod->base - mod->min_addr);
+		  else if (grub_strcmp (name, "grub_mod_fini") == 0)
+		    mod->fini = (void (*) (void)) (sym->st_value + (Elf_Addr) mod->base - mod->min_addr);
+		}
+	    }
+	}
+#endif
 
   for (i = 0, s = (Elf_Shdr *) ((char *) e + e->e_shoff);
        i < e->e_shnum;
@@ -337,12 +374,13 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
       unsigned char type = ELF_ST_TYPE (sym->st_info);
       unsigned char bind = ELF_ST_BIND (sym->st_info);
       const char *name = str + sym->st_name;
+      int isfunc = type == STT_FUNC;
 
       switch (type)
 	{
 	case STT_NOTYPE:
 	case STT_OBJECT:
-	  
+	case STT_FUNC:
 	  /* Resolve a global symbol.  */
 	  if (sym->st_name != 0 && sym->st_shndx == 0)
 	    {
@@ -359,33 +397,31 @@ grub_dl_resolve_symbols (grub_dl_t mod, Elf_Ehdr *e)
 	  else
 	    {
 	      sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
+#ifdef __ia64__
+	      if (isfunc)
+		{
+		  /* FIXME: free descriptor once it's not used anymore. */
+		  char **desc;
+		  desc = grub_malloc (2 * sizeof (char *));
+		  if (!desc)
+		    return grub_errno;
+		  desc[0] = (void *) sym->st_value;
+		  desc[1] = (char *) mod->base + mod->pltgot;
+		  sym->st_value = (grub_addr_t) desc;
+		}
+#endif
 	      if (bind != STB_LOCAL)
-		if (grub_dl_register_symbol (name, (void *) sym->st_value, 0, mod))
+		if (grub_dl_register_symbol (name, (void *) sym->st_value, isfunc, mod))
 		  return grub_errno;
+	      if (isfunc && grub_strcmp (name, "grub_mod_init") == 0)
+		mod->init = (void (*) (grub_dl_t)) sym->st_value;
+	      else if (isfunc && grub_strcmp (name, "grub_mod_fini") == 0)
+		mod->fini = (void (*) (void)) sym->st_value;
 	    }
 	  break;
 
-	case STT_FUNC:
-	  sym->st_value += (Elf_Addr) mod->base - mod->min_addr;
-#ifdef __ia64__
-	  {
-	      /* FIXME: free descriptor once it's not used anymore. */
-	      char **desc;
-	      desc = grub_malloc (2 * sizeof (char *));
-	      if (!desc)
-		return grub_errno;
-	      desc[0] = (void *) sym->st_value;
-	      desc[1] = mod->base;
-	      sym->st_value = (grub_addr_t) desc;
-	  }
-#endif
-	  if (bind != STB_LOCAL)
-	    if (grub_dl_register_symbol (name, (void *) sym->st_value, 1, mod))
-	      return grub_errno;
-	  if (grub_strcmp (name, "grub_mod_init") == 0)
-	    mod->init = (void (*) (grub_dl_t)) sym->st_value;
-	  else if (grub_strcmp (name, "grub_mod_fini") == 0)
-	    mod->fini = (void (*) (void)) sym->st_value;
+	case STT_SECTION:
+	  sym->st_value = (Elf_Addr) mod->base - mod->min_addr;
 	  break;
 
 	case STT_FILE:
@@ -705,6 +741,9 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
       || grub_dl_load_segments (mod, e)
       || grub_dl_resolve_symbols (mod, e)
       || grub_dl_relocate_symbols (mod, e)
+#ifdef __mips__
+      || grub_arch_dl_relocate_pltgot (mod)
+#endif
       || grub_dl_set_mem_attrs (mod, e))
     {
       mod->fini = 0;

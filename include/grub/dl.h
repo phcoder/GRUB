@@ -180,6 +180,12 @@ struct grub_dl
 #endif
 #ifdef __mips__
   grub_uint32_t *reginfo;
+  grub_uint32_t gotsym;
+  grub_uint32_t local_gotno;
+  grub_uint32_t symtabno;
+#endif
+#if defined (__mips__) || defined(__ia64__)
+  grub_size_t pltgot;
 #endif
   void *base;
   grub_size_t sz;
@@ -260,6 +266,8 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 #if defined (_mips)
 #define GRUB_LINKER_HAVE_INIT 1
 void grub_arch_dl_init_linker (void);
+
+grub_err_t grub_arch_dl_relocate_pltgot (grub_dl_t mod);
 #endif
 
 #define GRUB_IA64_DL_TRAMP_ALIGN 16
@@ -271,6 +279,10 @@ grub_ia64_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 grub_err_t
 grub_arm64_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 				  grub_size_t *got);
+
+#if defined (__ia64__) || defined (__mips__)
+void grub_arch_dl_parse_dynamic (grub_dl_t mod, Elf_Dyn *dyn, grub_size_t sz);
+#endif
 
 #if defined (__ia64__)
 #define GRUB_ARCH_DL_TRAMP_ALIGN GRUB_IA64_DL_TRAMP_ALIGN

@@ -52,8 +52,7 @@ grub_arch_dl_check_header (void *ehdr)
  * Unified function for both REL and RELA
  */
 grub_err_t
-grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
-			       Elf_Shdr *s, grub_dl_segment_t seg)
+grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr, Elf_Shdr *s)
 {
   Elf_Rel *rel, *max;
   unsigned unmatched_adr_got_page = 0;
@@ -67,9 +66,10 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       void *place;
       grub_uint64_t sym_addr;
 
-      if (rel->r_offset >= seg->size)
+      if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment");
+			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
       sym = (Elf_Sym *) ((char *) mod->symtab
 			 + mod->symsize * ELF_R_SYM (rel->r_info));
@@ -78,11 +78,13 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
       if (s->sh_type == SHT_RELA)
 	sym_addr += ((Elf_Rela *) rel)->r_addend;
 
-      place = (void *) ((grub_addr_t) seg->addr + rel->r_offset);
+      place = (void *) ((char *) mod->base + rel->r_offset - mod->min_addr);
 
       switch (ELF_R_TYPE (rel->r_info))
 	{
 	case R_AARCH64_ABS64:
+	case R_AARCH64_JUMP_SLOT:
+	case R_AARCH64_GLOB_DAT:
 	  {
 	    grub_uint64_t *abs_place = place;
 
@@ -125,7 +127,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 	    grub_int64_t value;
 	    Elf64_Word *addr32 = place;
 	    value = ((grub_int32_t) *addr32) + sym_addr -
-	      (Elf64_Xword) (grub_addr_t) seg->addr - rel->r_offset;
+	      (Elf64_Xword) (grub_addr_t) place;
 	    if (value != (grub_int32_t) value)
 	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation out of range");
 	    grub_dprintf("dl", "  reloc_prel32 %p => 0x%016llx\n",
@@ -155,7 +157,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 		  && ((Elf_Rela *) rel)->r_addend == rel2->r_addend
 		  && ELF_R_TYPE (rel2->r_info) == R_AARCH64_LD64_GOT_LO12_NC)
 		{
-		  grub_arm64_set_abs_lo12_ldst64 ((void *) ((grub_addr_t) seg->addr + rel2->r_offset),
+		  grub_arm64_set_abs_lo12_ldst64 ((void *) ((char *) mod->base + rel2->r_offset - mod->min_addr),
 						  (grub_uint64_t)gp);
 		  break;
 		}
@@ -180,6 +182,12 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
 	    grub_arm64_set_hi21 (place, offset);
 	  }
+	  break;
+
+	case R_AARCH64_RELATIVE:
+	  *(grub_uint64_t *)place = (grub_addr_t) mod->base - mod->min_addr;
+	  if (s->sh_type == SHT_RELA)
+	    *(grub_uint64_t *)place += ((Elf_Rela *) rel)->r_addend;
 	  break;
 
 	default:

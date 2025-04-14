@@ -385,14 +385,16 @@ section_check_relocations (const char * const modname,
     {
       Elf_Sym *sym;
       unsigned i;
+      grub_uint32_t type = ELF_R_TYPE (grub_target_to_host (rel->r_info));
+
+      if (type == 0)
+	continue;
 
       if (grub_target_to_host (rel->r_offset) < min_addr || grub_target_to_host (rel->r_offset) >= max_addr)
-	grub_util_error ("%s: reloc offset is out of the segment %llx not in %llx-%llx",
+	grub_util_error ("%s: reloc offset is out of the segment: %llx not in %llx-%llx",
 			 modname,
 			 (long long) grub_target_to_host (rel->r_offset),
 			 (long long) min_addr, (long long) max_addr);
-
-      grub_uint32_t type = ELF_R_TYPE (grub_target_to_host (rel->r_info));
 
       if (arch->machine == EM_SPARCV9)
 	type &= 0xff;
