@@ -187,7 +187,9 @@ case "$target_cpu"-"$platform" in
   mips-qemu_mips) ;;
   mips-qemu-mips) platform=qemu_mips;;
   mips-arc) ;;
+  mips-malta) ;;
   mipsel-arc) ;;
+  mipsel-malta) ;;
   mipsel-qemu_mips) ;;
   mipsel-qemu-mips) platform=qemu_mips;;
   mipsel-yeeloong) platform=loongson ;;
@@ -253,6 +255,7 @@ case "$platform" in
   emu)		machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_EMU=1" ;;
   loongson)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_LOONGSON=1" ;;
   qemu_mips)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_QEMU_MIPS=1" ;;
+  malta)	machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_MIPS_MALTA=1" ;;
   arc)		machine_CPPFLAGS="$machine_CPPFLAGS -DGRUB_MACHINE_ARC=1" ;;
 esac
 if test x${target_cpu} = xmipsel ; then
@@ -270,7 +273,7 @@ case "${target_cpu}-$platform" in
         TARGET_LINK_ADDR=0x80700000
 	TARGET_DECOMPRESSOR_LINK_ADDR=0x80600000
 	;;
-     mips*-qemu_mips | mips*-loongson)
+     mips*-qemu_mips | mips*-loongson | mips*-malta)
         TARGET_DECOMPRESSOR_LINK_ADDR=0x80100000
 	;;
 esac
@@ -744,6 +747,50 @@ int main (void);
 
   TARGET_CFLAGS="$TARGET_CFLAGS $grub_cv_target_cc_mips_o32_abi"
   TARGET_CCASFLAGS="$TARGET_CCASFLAGS $grub_cv_target_cc_mips_o32_abi"
+fi
+
+TARGET_RUST_TARGET_SHORT=
+TARGET_RUST_FLAGS=
+TARGET_RUST_ENABLED=yes
+case "x$target_cpu-$platform" in
+     xarm-*)
+	TARGET_RUST_TARGET=armv5te-unknown-linux-gnueabi
+	;;
+     xarm64-*)
+	TARGET_RUST_TARGET=aarch64-unknown-linux-gnu
+	;;
+     xi386-*)
+       TARGET_RUST_TARGET=i586-unknown-linux-gnu
+	;;
+     xriscv32-*)
+	TARGET_RUST_TARGET=riscv32gc-unknown-linux-gnu
+	;;
+     xriscv64-*)
+	TARGET_RUST_TARGET=riscv64gc-unknown-linux-gnu
+	;;
+     xmipsel-loongson)
+     	TARGET_RUST_TARGET=mipsel1.json
+     	TARGET_RUST_TARGET_SHORT=mipsel1
+	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
+	;;
+     xmips-* | xmipsel-*)
+	TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
+	TARGET_RUST_FLAGS="-C link-args=-mabi=32"
+        ;;
+     xloongarch64-*)
+        TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
+	TARGET_RUST_FLAGS="-C target-feature=-lsx"
+	;;
+     xx86_64-* | xpowerpc-* | xsparc64-*)
+        TARGET_RUST_TARGET=${target_cpu}-unknown-linux-gnu
+        ;;
+     *)
+        AC_MSG_WARN([Rust is not supported yet for $target_cpu])
+	TARGET_RUST_ENABLED=no
+	;;
+esac
+if test "x$TARGET_RUST_TARGET_SHORT" = x ; then
+   TARGET_RUST_TARGET_SHORT="$TARGET_RUST_TARGET"
 fi
 
 AC_CACHE_CHECK([for options to compile assembly], [grub_cv_cc_target_asm_compile], [
@@ -1847,7 +1894,7 @@ if test x"$grub_build_mkfont_excuse" = x ; then
 else
   enable_build_grub_mkfont=no
 fi
-if test x"$enable_build_grub_mkfont" = xno && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
+if test x"$enable_build_grub_mkfont" = xno && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xmalta || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
   if test x"$grub_build_mkfont_excuse" = x ; then
     AC_MSG_ERROR([qemu, coreboot and loongson ports need build-time grub-mkfont])
   else
@@ -1932,7 +1979,7 @@ if test x"$enable_build_grub_mkfont" = xno ; then
   FONT_SOURCE=
 fi
 
-if test "x$FONT_SOURCE" = x && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
+if test "x$FONT_SOURCE" = x && ( test "x$platform" = xqemu || test "x$platform" = xloongson || test "x$platform" = xmalta || test "x$platform" = xqemu_mips || test "x$platform" = xcoreboot ); then
   if test x"$grub_build_mkfont_excuse" = x ; then
     AC_MSG_ERROR([qemu, coreboot and loongson ports need unifont])
   else
@@ -2166,6 +2213,9 @@ AC_SUBST(TARGET_CFLAGS)
 AC_SUBST(TARGET_LDFLAGS)
 AC_SUBST(TARGET_CPPFLAGS)
 AC_SUBST(TARGET_CCASFLAGS)
+AC_SUBST(TARGET_RUST_TARGET)
+AC_SUBST(TARGET_RUST_TARGET_SHORT)
+AC_SUBST(TARGET_RUST_FLAGS)
 
 AC_SUBST(TARGET_IMG_LDFLAGS)
 AC_SUBST(TARGET_IMG_CFLAGS)
@@ -2206,6 +2256,7 @@ AM_CONDITIONAL([COND_mips], [test x$target_cpu = xmips -o x$target_cpu = xmipsel
 AM_CONDITIONAL([COND_mips_arc], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xarc])
 AM_CONDITIONAL([COND_mips_loongson], [test x$target_cpu = xmipsel -a x$platform = xloongson])
 AM_CONDITIONAL([COND_mips_qemu_mips], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xqemu_mips])
+AM_CONDITIONAL([COND_mips_malta], [test "(" x$target_cpu = xmips -o x$target_cpu = xmipsel ")"  -a x$platform = xmalta])
 AM_CONDITIONAL([COND_mipsel], [test x$target_cpu = xmipsel])
 AM_CONDITIONAL([COND_mipseb], [test x$target_cpu = xmips])
 AM_CONDITIONAL([COND_powerpc_ieee1275], [test x$target_cpu = xpowerpc -a x$platform = xieee1275])
@@ -2226,6 +2277,8 @@ AM_CONDITIONAL([COND_HOST_WINDOWS], [test x$host_kernel = xwindows])
 AM_CONDITIONAL([COND_HOST_KFREEBSD], [test x$host_kernel = xkfreebsd])
 AM_CONDITIONAL([COND_HOST_XNU], [test x$host_kernel = xxnu])
 AM_CONDITIONAL([COND_HOST_ILLUMOS], [test x$host_kernel = xillumos])
+
+AM_CONDITIONAL([COND_rust], [test x$TARGET_RUST_ENABLED != xno])
 
 AM_CONDITIONAL([COND_MAN_PAGES], [test x$cross_compiling = xno -a x$HELP2MAN != x])
 AM_CONDITIONAL([COND_GRUB_EMU_SDL2], [test x$enable_grub_emu_sdl2 = xyes])

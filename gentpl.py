@@ -29,7 +29,7 @@ import re
 GRUB_PLATFORMS = [ "emu", "i386_pc", "i386_efi", "i386_qemu", "i386_coreboot",
                    "i386_multiboot", "i386_ieee1275", "x86_64_efi",
                    "i386_xen", "x86_64_xen", "i386_xen_pvh",
-                   "mips_loongson", "sparc64_ieee1275",
+                   "mips_loongson", "mips_malta", "sparc64_ieee1275",
                    "powerpc_ieee1275", "mips_arc", "ia64_efi",
                    "mips_qemu_mips", "arm_uboot", "arm_efi", "arm64_efi",
                    "arm_coreboot", "loongarch64_efi", "riscv32_efi", "riscv64_efi" ]
@@ -42,7 +42,7 @@ GROUPS["common"]   = GRUB_PLATFORMS[:]
 GROUPS["i386"]        = [ "i386_pc", "i386_efi", "i386_qemu", "i386_coreboot", "i386_multiboot", "i386_ieee1275" ]
 GROUPS["x86_64"]      = [ "x86_64_efi" ]
 GROUPS["x86"]         = GROUPS["i386"] + GROUPS["x86_64"]
-GROUPS["mips"]        = [ "mips_loongson", "mips_qemu_mips", "mips_arc" ]
+GROUPS["mips"]        = [ "mips_loongson", "mips_qemu_mips", "mips_arc", "mips_malta" ]
 GROUPS["sparc64"]     = [ "sparc64_ieee1275" ]
 GROUPS["powerpc"]     = [ "powerpc_ieee1275" ]
 GROUPS["arm"]         = [ "arm_uboot", "arm_efi", "arm_coreboot" ]
@@ -66,7 +66,7 @@ GROUPS["noemu"]   = GRUB_PLATFORMS[:]; GROUPS["noemu"].remove("emu")
 GROUPS["cmos"] = GROUPS["x86"][:] + ["mips_loongson", "mips_qemu_mips",
                                      "sparc64_ieee1275", "powerpc_ieee1275"]
 GROUPS["cmos"].remove("i386_efi"); GROUPS["cmos"].remove("x86_64_efi");
-GROUPS["pci"]      = GROUPS["x86"] + ["mips_loongson"]
+GROUPS["pci"]      = GROUPS["x86"] + ["mips_loongson", "mips_malta"]
 GROUPS["usb"]      = GROUPS["pci"] + ["arm_coreboot"]
 
 # If gfxterm is main output console integrate it into kernel
@@ -75,7 +75,7 @@ GROUPS["videomodules"]   = GRUB_PLATFORMS[:];
 for i in GROUPS["videoinkernel"]: GROUPS["videomodules"].remove(i)
 
 # Similar for terminfo
-GROUPS["terminfoinkernel"] = [ "emu", "mips_loongson", "mips_arc", "mips_qemu_mips", "i386_xen_pvh" ] + GROUPS["xen"] + GROUPS["ieee1275"] + GROUPS["uboot"];
+GROUPS["terminfoinkernel"] = [ "emu", "mips_loongson", "mips_arc", "mips_qemu_mips", "i386_xen_pvh", "mips_malta" ] + GROUPS["xen"] + GROUPS["ieee1275"] + GROUPS["uboot"];
 GROUPS["terminfomodule"]   = GRUB_PLATFORMS[:];
 for i in GROUPS["terminfoinkernel"]: GROUPS["terminfomodule"].remove(i)
 
@@ -712,6 +712,28 @@ def module(defn, platform):
 	grep 'MARKER' $@.new | grep -v '^#' > $@; rm -f $@.new
 """)
 
+
+def rust_module(defn, platform):
+    output("if COND_rust\n")
+    name = defn['name']
+    rust_name = defn['rust_name']
+    set_canonical_name_suffix(".module")
+    rust_lib = f"rust/$(RUST_TARGET_SHORT)/release/lib{rust_name}.so"
+    grub_module = name + ".module$(EXEEXT)"
+
+    gvar_add("MODULE_FILES", grub_module)
+
+    gvar_add("CLEANFILES", grub_module)
+
+    gvar_add("MOD_FILES", name + ".mod")
+#    gvar_add("MARKER_FILES", name + ".marker")
+    gvar_add("CLEANFILES", name + ".marker")
+
+    output(f"\n{rust_lib}: rust-compile\n")
+    output(f"\n{grub_module}: {rust_lib}\n	cp $< $@\n")
+    output("endif\n")
+
+
 def kernel(defn, platform):
     name = defn['name']
     set_canonical_name_suffix(".exec")
@@ -903,6 +925,7 @@ for arg in args:
     defparser.read_definitions(arg)
 
 rules("module", module)
+rules("rust_module", rust_module)
 rules("kernel", kernel)
 rules("image", image)
 rules("library", library)

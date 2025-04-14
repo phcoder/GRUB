@@ -16,6 +16,9 @@ AM_CFLAGS = $(TARGET_CFLAGS)
 AM_LDFLAGS = $(TARGET_LDFLAGS)
 AM_CPPFLAGS = $(TARGET_CPPFLAGS) $(CPPFLAGS_DEFAULT)
 AM_CCASFLAGS = $(TARGET_CCASFLAGS) $(CCASFLAGS_DEFAULT)
+RUST_TARGET = $(TARGET_RUST_TARGET)
+RUST_TARGET_SHORT = $(TARGET_RUST_TARGET_SHORT)
+RUST_FLAGS = $(TARGET_RUST_FLAGS)
 
 CFLAGS_PROGRAM += $(CFLAGS_PLATFORM)
 LDFLAGS_PROGRAM += $(LDFLAGS_PLATFORM)
@@ -211,6 +214,17 @@ KERNEL_HEADER_FILES += $(top_builddir)/include/grub/keyboard_layouts.h
 KERNEL_HEADER_FILES += $(top_builddir)/include/grub/machine/kernel.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/serial.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/loader.h
+KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/terminfo.h
+KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/extcmd.h
+KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/lib/arg.h
+endif
+
+if COND_mips_malta
+#KERNEL_HEADER_FILES += $(top_builddir)/include/grub/keyboard_layouts.h
+KERNEL_HEADER_FILES += $(top_builddir)/include/grub/machine/kernel.h
+KERNEL_HEADER_FILES += $(top_builddir)/include/grub/machine/pci.h
+KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/serial.h
+#KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/loader.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/terminfo.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/extcmd.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/lib/arg.h
@@ -520,3 +534,9 @@ windowsdir: $(PROGRAMS) $(starfield_DATA) $(platform_DATA)
 	for x in $(platform_DATA); do \
 		cp -fp $$x $(windowsdir)/$(target_cpu)-$(platform)/$$x; \
 	done
+
+
+.PHONY: rust-compile
+
+rust-compile:
+	(cd $(srcdir)/rust; RUSTFLAGS="-C linker=$(TARGET_CC) $(RUST_FLAGS) -C link-args=-nostdlib" cargo build --target-dir=$(PWD)/rust --workspace --target=$(RUST_TARGET) -Z build-std=core,alloc -r)

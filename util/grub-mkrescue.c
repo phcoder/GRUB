@@ -967,6 +967,7 @@ main (int argc, char *argv[])
 
   grub_install_push_module ("pata");
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_QEMU_MIPS, "mipsel-qemu_mips-elf", "roms/mipsel-qemu_mips.elf");
+  make_image (GRUB_INSTALL_PLATFORM_MIPSEL_MALTA, "mipsel-malta-elf", "roms/mipsel-malta.elf");
 
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "mipsel-loongson-elf", "loongson.elf");
 
@@ -974,6 +975,7 @@ main (int argc, char *argv[])
   make_image (GRUB_INSTALL_PLATFORM_MIPSEL_LOONGSON, "mipsel-fuloong2f-flash", "mipsel-fuloong2f.bin");
 
   make_image (GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS, "mips-qemu_mips-elf", "roms/mips-qemu_mips.elf");
+  make_image (GRUB_INSTALL_PLATFORM_MIPS_MALTA, "mips-malta-elf", "roms/mips-malta.elf");
 
   grub_install_push_module ("at_keyboard");
 
@@ -1001,6 +1003,8 @@ main (int argc, char *argv[])
 	    {GRUB_INSTALL_PLATFORM_MIPS_QEMU_MIPS, "roms/mips-qemu_mips.elf", "mips-qemu_mips.elf"},
 	    {GRUB_INSTALL_PLATFORM_I386_QEMU, "roms/qemu.img", "qemu.img"},
 	    {GRUB_INSTALL_PLATFORM_I386_COREBOOT, "roms/coreboot.elf", "coreboot.elf"},
+	    {GRUB_INSTALL_PLATFORM_MIPS_MALTA, "roms/mips-malta.elf", "mips-malta.elf"},
+	    {GRUB_INSTALL_PLATFORM_MIPSEL_MALTA, "roms/mipsel-malta.elf", "mipsel-malta.elf"},
 	  };
       grub_size_t i;
       for (i = 0; i < ARRAY_SIZE (roms); i++)

@@ -194,6 +194,7 @@ EXPORT_FUNC(__bswapdi2) (grub_uint64_t u);
 
 /* Prototypes for aliases.  */
 int GRUB_BUILTIN_ATTR EXPORT_FUNC(memcmp) (const void *s1, const void *s2, grub_size_t n);
+int GRUB_BUILTIN_ATTR EXPORT_FUNC(bcmp) (const void *s1, const void *s2, grub_size_t n);
 void *GRUB_BUILTIN_ATTR EXPORT_FUNC(memmove) (void *dest, const void *src, grub_size_t n);
 void *GRUB_BUILTIN_ATTR EXPORT_FUNC(memcpy) (void *dest, const void *src, grub_size_t n);
 void *GRUB_BUILTIN_ATTR EXPORT_FUNC(memset) (void *s, int c, grub_size_t n);

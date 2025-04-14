@@ -1,0 +1,10 @@
+[package]
+authors = ["Vladimir Serbinenko <phcoder@gmail.com>"]
+edition = "2024"
+name = "grub"
+version = "0.1.0"
+
+[dependencies]
+
+[lib]
+crate-type = ["staticlib", "dylib"]
