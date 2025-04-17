@@ -160,6 +160,16 @@ grub_efi_allocate_pages_real (grub_efi_physical_address_t address,
 	}
     }
 
+#ifdef __x86_64__
+  status = grub_efi_arch_ensure_mapping (address, pages);
+  if (status != GRUB_EFI_SUCCESS)
+    {
+      b->free_pages (address, pages);
+      grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+      return NULL;
+    }
+#endif
+
   grub_efi_store_alloc (address, pages);
 
   return (void *) ((grub_addr_t) address);
