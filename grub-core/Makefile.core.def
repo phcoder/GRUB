@@ -835,6 +835,12 @@ module = {
 };
 
 module = {
+  name = lspaging;
+  arm64_efi = commands/arm64/lspaging.c;
+  enable = arm64_efi;
+};
+
+module = {
   name = lsefimmap;
 
   common = commands/efi/lsefimmap.c;
@@ -2001,7 +2007,8 @@ module = {
   common = loader/i386/coreboot/chainloader.c;
   common = lib/LzmaDec.c;
   enable = i386_pc;
-  enable = efi;
+  enable = i386_efi;
+  enable = x86_64_efi;
 };
 
 module = {
@@ -2779,3 +2786,9 @@ rust_module = {
   name = rust_hello;
   rust_name = grub_rust_hello;
 };
+
+/*rust_module = {
+  name = lspaging;
+  rust_name = grub_rust_lspaging;
+  enable = arm64_efi;
+};*/
