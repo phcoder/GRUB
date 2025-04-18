@@ -836,8 +836,10 @@ module = {
 
 module = {
   name = lspaging;
+  x86_64_efi = commands/x86_64/lspaging.c;
   arm64_efi = commands/arm64/lspaging.c;
   enable = arm64_efi;
+  enable = x86_64_efi;
 };
 
 module = {
