@@ -14,6 +14,9 @@ if !COND_emu
   LDFLAGS_PLATFORM = -Wl,--wrap=__clear_cache
 endif
 endif
+if COND_loongarch64
+  CFLAGS_PLATFORM += -mcmodel=extreme
+endif
 if COND_arm64
   CFLAGS_PLATFORM += -mcmodel=large
 endif
