@@ -215,6 +215,10 @@ void ___chkstk_ms (void)
 void __chkstk_ms (void)
 {
 }
+
+void _pei386_runtime_relocator (void)
+{
+}
 #endif
 
 union component64

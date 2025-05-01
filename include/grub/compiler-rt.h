@@ -208,6 +208,7 @@ void EXPORT_FUNC (__register_frame_info) (void);
 void EXPORT_FUNC (__deregister_frame_info) (void);
 void EXPORT_FUNC (___chkstk_ms) (void);
 void EXPORT_FUNC (__chkstk_ms) (void);
+void EXPORT_FUNC (_pei386_runtime_relocator) (void);
 #endif
 
 #endif
