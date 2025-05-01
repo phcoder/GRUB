@@ -575,11 +575,21 @@ tmp_CFLAGS="$CFLAGS"
 tmp_LDFLAGS="$LDFLAGS"
 tmp_CPPFLAGS="$CPPFLAGS"
 tmp_LIBS="$LIBS"
+tmp_EXEEXT="$EXEEXT"
+tmp_ac_exeext="$ac_exeext"
 CC="$TARGET_CC"
 CFLAGS="$TARGET_CFLAGS"
 CPPFLAGS="$TARGET_CPPFLAGS"
 LDFLAGS="$TARGET_LDFLAGS"
 LIBS=""
+
+case "$target_os" in
+  cygwin*|mingw32*|mingw64*)		TARGET_EXEEXT=.exe ;;
+  *)					TARGET_EXEEXT= ;;
+esac
+
+EXEEXT="$TARGET_EXEEXT"
+ac_exeext="$TARGET_EXEEXT"
 
 if test "x$target_m32" = x1; then
   # Force 32-bit mode.
@@ -1618,6 +1628,8 @@ CFLAGS="$tmp_CFLAGS"
 CPPFLAGS="$tmp_CPPFLAGS"
 LDFLAGS="$tmp_LDFLAGS"
 LIBS="$tmp_LIBS"
+EXEEXT="$tmp_EXEEXT"
+ac_exeext="$tmp_ac_exeext"
 
 #
 # Check for options.
