@@ -61,7 +61,8 @@ process_level(grub_uint64_t *start_address, mapping_type_t *start_type,
   if (*start_type != cur_type)
     {
       if (cur_address != 0)
-	grub_printf("%08lx-%08lx: %s\n", *start_address, cur_address, mapping_names[*start_type]);
+	grub_printf("%08" PRIxGRUB_UINT64_T "-%08" PRIxGRUB_UINT64_T ": %s\n",
+		    *start_address, cur_address, mapping_names[*start_type]);
       *start_type = cur_type;
       *start_address = cur_address;
     }
@@ -82,7 +83,7 @@ grub_cmd_lspaging (struct grub_command *cmd __attribute__ ((unused)),
   grub_uint64_t start_address = 0, cur_address = 0, next_address = 0;
   mapping_type_t start_type = UNMAPPED;
 
-  grub_printf("baddr=%lx\n", baddr);
+  grub_printf("baddr=%" PRIxGRUB_UINT64_T "\n", baddr);
 
   for (cur_address = 0; cur_address < 0x7fffffffffff; cur_address = next_address)
     {
@@ -96,7 +97,8 @@ grub_cmd_lspaging (struct grub_command *cmd __attribute__ ((unused)),
       process_level(&start_address, &start_type, &next_address, &lx, cur_address, 12);
     }
 
-  grub_printf("%08lx-%08lx: %s\n", start_address, cur_address, mapping_names[start_type]);
+  grub_printf("%08" PRIxGRUB_UINT64_T "-%08" PRIxGRUB_UINT64_T ": %s\n",
+	      start_address, cur_address, mapping_names[start_type]);
 
   return GRUB_ERR_NONE;
 }
