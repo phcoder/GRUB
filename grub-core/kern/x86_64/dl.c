@@ -56,7 +56,7 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 
       if (mod->min_addr + mod->sz <= rel->r_offset || mod->min_addr > rel->r_offset)
 	return grub_error (GRUB_ERR_BAD_MODULE,
-			   "reloc offset is out of the segment: %lx not in [%lx..%lx]",
+			   "reloc offset is out of the segment: %" PRIxGRUB_UINT64_T " not in [%" PRIxGRUB_UINT64_T "..%" PRIxGRUB_UINT64_T "]",
 			   rel->r_offset, mod->min_addr, mod->min_addr + mod->sz);
 
       addr32 = (Elf64_Word *) ((char *) mod->base + rel->r_offset - mod->min_addr);
