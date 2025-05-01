@@ -1014,10 +1014,6 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  *target = grub_host_to_target64 (addend + layout->vaddr_diff);
 		  break;
 
-		case R_IA64_REL64LSB:
-		  *target = grub_host_to_target64 (addend + layout->vaddr_diff);
-		  break;
-
 		case R_IA64_LTOFF22X:
 		case R_IA64_LTOFF22:
 		  {
@@ -1054,15 +1050,6 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 						   - target_section_vaddr - offset);
 		  break;
 
-		case R_IA64_IPLTLSB:
-		  memcpy(target, ((char *)pe_target + addend + sym_addr - image_target->vaddr_offset), 16);
-		  grub_util_info ("relocating an IPLT entry to 0x%"
-				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
-				  GRUB_HOST_PRIxLONG_LONG,
-				  (unsigned long long)
-				  grub_target_to_host64 (*target),
-				  (unsigned long long) offset);
-		  break;
 		case R_IA64_IPLTLSB:
 		  memcpy(target, ((char *)pe_target + addend + sym_addr - image_target->vaddr_offset), 16);
 		  grub_util_info ("relocating an IPLT entry to 0x%"
