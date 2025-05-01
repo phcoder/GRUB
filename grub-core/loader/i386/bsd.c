@@ -667,9 +667,9 @@ iterate_get_zerotables_size (grub_linuxbios_table_item_t table_item, void *data)
     return 0;
 
   mem_region =
-    (mem_region_t) ((long) table_item +
+    (mem_region_t) ((grub_addr_t) table_item +
 			       sizeof (struct grub_linuxbios_table_item));
-  for (; (long) mem_region < (long) table_item + (long) table_item->size;
+  for (; (grub_addr_t) mem_region < (grub_addr_t) table_item + (grub_addr_t) table_item->size;
        mem_region++)
     {
       if (mem_region->type == GRUB_MEMORY_COREBOOT_TABLES
