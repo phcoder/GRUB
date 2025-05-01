@@ -1368,8 +1368,10 @@ if test "$target_cpu" = x86_64 || test "$target_cpu" = sparc64 || test "$target_
   ])
   if test "x$grub_cv_cc_mcmodel" = xyes; then
     TARGET_CFLAGS="$TARGET_CFLAGS -mcmodel=large"
-  elif test "$target_cpu" = sparc64 || test "$target_cpu" = riscv64; then
+  elif test "$target_cpu" = sparc64 ; then
     TARGET_CFLAGS="$TARGET_CFLAGS -mcmodel=medany"
+  else
+    AC_MSG_ERROR([-mcmodel=large not supported, upgrade your gcc])
   fi
 fi
 

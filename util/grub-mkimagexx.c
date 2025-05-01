@@ -824,14 +824,11 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
   Elf_Half i;
   Elf_Shdr *s;
 #ifdef MKIMAGE_ELF64
-  struct grub_ia64_trampoline *tr = (void *) (pe_target + layout->tramp_off);
   grub_uint64_t *gpptr = (void *) (pe_target + layout->got_off);
   unsigned unmatched_adr_got_page = 0;
   struct grub_loongarch64_stack stack;
   grub_loongarch64_stack_init (&stack);
 #define MASK19 ((1 << 19) - 1)
-#else
-  grub_uint32_t *tr = (void *) (pe_target + layout->tramp_off);
 #endif
 
   for (i = 0, s = smd->sections;
@@ -844,7 +841,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 	Elf_Word rtab_size, r_size, num_rs;
 	Elf_Off rtab_offset;
 	Elf_Word target_section_index;
-	Elf_Addr target_section_addr = layout->vaddr_diff;
+	Elf_Addr target_section_vaddr = layout->vaddr_diff;
 	Elf_Shdr *target_section;
 	Elf_Word j;
 
@@ -898,6 +895,10 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		case R_386_NONE:
 		  break;
 
+		case R_386_RELATIVE:
+		  *target = grub_host_to_target32 (grub_target_to_host32 (*target) + addend + layout->vaddr_diff);
+		  break;
+
 		case R_386_32:
 		  /* This is absolute.  */
 		  *target = grub_host_to_target32 (grub_target_to_host32 (*target)
@@ -913,8 +914,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  /* This is relative.  */
 		  *target = grub_host_to_target32 (grub_target_to_host32 (*target)
 						   + addend + sym_addr
-						   - target_section_addr - offset
-						   - image_target->vaddr_offset);
+						   - target_section_vaddr - offset);
 		  grub_util_info ("relocating an R_386_PC32 entry to 0x%"
 				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
 				  GRUB_HOST_PRIxLONG_LONG,
@@ -965,8 +965,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		    grub_uint32_t *t32 = (grub_uint32_t *) target;
 		    *t32 = grub_host_to_target64 (grub_target_to_host32 (*t32)
 						  + addend + sym_addr
-						  - target_section_addr - offset
-						  - image_target->vaddr_offset);
+						  - target_section_vaddr - offset);
 		    grub_util_info ("relocating an R_X86_64_PC32 entry to 0x%x at the offset 0x%"
 				    GRUB_HOST_PRIxLONG_LONG,
 				    *t32, (unsigned long long) offset);
@@ -977,8 +976,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  {
 		    *target = grub_host_to_target64 (grub_target_to_host64 (*target)
 						     + addend + sym_addr
-						     - target_section_addr - offset
-						     - image_target->vaddr_offset);
+						     - target_section_vaddr - offset);
 		    grub_util_info ("relocating an R_X86_64_PC64 entry to 0x%"
 				    GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
 				    GRUB_HOST_PRIxLONG_LONG,
@@ -1009,18 +1007,11 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 	      switch (ELF_R_TYPE (info))
 		{
 		case R_IA64_PCREL21B:
-		  {
-		    grub_uint64_t noff;
-		    grub_ia64_make_trampoline (tr, addend + sym_addr);
-		    noff = ((char *) tr - (char *) pe_target
-			    - target_section_addr - (offset & ~3)) >> 4;
-		    tr++;
-		    if (noff & ~MASK19)
-		      grub_util_error ("trampoline offset too big (%"
-				       GRUB_HOST_PRIxLONG_LONG ")",
-				       (unsigned long long) noff);
-		    grub_ia64_add_value_to_slot_20b ((grub_addr_t) target, noff);
-		  }
+		  grub_util_error("inserting trampolines is no longer supported");
+		  break;
+
+		case R_IA64_REL64LSB:
+		  *target = grub_host_to_target64 (addend + layout->vaddr_diff);
 		  break;
 
 		case R_IA64_REL64LSB:
@@ -1060,13 +1051,17 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		case R_IA64_PCREL64LSB:
 		  *target = grub_host_to_target64 (grub_target_to_host64 (*target)
 						   + addend + sym_addr
-						   - target_section_addr - offset
-						   - image_target->vaddr_offset);
+						   - target_section_vaddr - offset);
 		  break;
 
-		case R_IA64_SEGREL64LSB:
-		  *target = grub_host_to_target64 (grub_target_to_host64 (*target)
-						   + addend + sym_addr - target_section_addr);
+		case R_IA64_IPLTLSB:
+		  memcpy(target, ((char *)pe_target + addend + sym_addr - image_target->vaddr_offset), 16);
+		  grub_util_info ("relocating an IPLT entry to 0x%"
+				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
+				  GRUB_HOST_PRIxLONG_LONG,
+				  (unsigned long long)
+				  grub_target_to_host64 (*target),
+				  (unsigned long long) offset);
 		  break;
 		case R_IA64_IPLTLSB:
 		  memcpy(target, ((char *)pe_target + addend + sym_addr - image_target->vaddr_offset), 16);
@@ -1119,8 +1114,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		       grub_uint32_t *t32 = (grub_uint32_t *) target;
 		       *t32 = grub_host_to_target64 (grub_target_to_host32 (*t32)
 						     + sym_addr
-						     - target_section_addr - offset
-						     - image_target->vaddr_offset);
+						     - target_section_vaddr - offset);
 		       grub_util_info ("relocating an R_AARCH64_PREL32 entry to 0x%x at the offset 0x%"
 				       GRUB_HOST_PRIxLONG_LONG,
 				       *t32, (unsigned long long) offset);
@@ -1138,7 +1132,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		   case R_AARCH64_CALL26:
 		     {
 		       sym_addr -= offset;
-		       sym_addr -= target_section_addr + image_target->vaddr_offset;
+		       sym_addr -= target_section_vaddr;
 		       if (!grub_arm_64_check_xxxx26_offset (sym_addr))
 			 grub_util_error ("%s", "CALL26 Relocation out of range");
 
@@ -1150,7 +1144,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		     {
 		       Elf64_Rela *rel2;
 		       grub_int64_t gpoffset = (((char *) gpptr - (char *) pe_target + image_target->vaddr_offset) & ~0xfffULL)
-			 - ((offset + target_section_addr + image_target->vaddr_offset) & ~0xfffULL);
+			 - ((offset + target_section_vaddr) & ~0xfffULL);
 		       unsigned k;
 		       *gpptr = grub_host_to_target64 (sym_addr);
 		       unmatched_adr_got_page++;
@@ -1184,7 +1178,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		   case R_AARCH64_ADR_PREL_PG_HI21:
 		     {
 		       sym_addr &= ~0xfffULL;
-		       sym_addr -= (offset + target_section_addr + image_target->vaddr_offset) & ~0xfffULL;
+		       sym_addr -= (offset + target_section_vaddr) & ~0xfffULL;
 		       if (!grub_arm64_check_hi21_signed (sym_addr))
 			 grub_util_error ("%s", "CALL26 Relocation out of range");
 
@@ -1206,7 +1200,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		 grub_uint32_t *t32 = (grub_uint32_t *) target;
 		 sym_addr += addend;
 
-		 pc = offset + target_section_addr + image_target->vaddr_offset;
+		 pc = offset + target_section_vaddr;
 
 		 switch (ELF_R_TYPE (info))
 		   {
@@ -1227,9 +1221,8 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		   case R_LARCH_SOP_PUSH_PCREL:
 		   case R_LARCH_SOP_PUSH_PLT_PCREL:
 		     grub_loongarch64_sop_push (&stack, sym_addr
-						-(target_section_addr
-						  +offset
-						  +image_target->vaddr_offset));
+						-(target_section_vaddr
+						  +offset));
 		     break;
 		   case R_LARCH_B26:
 		     {
@@ -1321,21 +1314,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		       if (ELF_ST_TYPE (sym->st_info) != STT_FUNC)
 			 sym_addr |= 1;
 		       if (!(sym_addr & 1))
-			 {
-			   grub_uint32_t tr_addr;
-			   grub_int32_t new_offset;
-			   tr_addr = (char *) tr - (char *) pe_target
-			     - target_section_addr;
-			   new_offset = sym_addr - tr_addr - 12;
-
-			   if (!grub_arm_jump24_check_offset (new_offset))
-			     return grub_util_error ("jump24 relocation out of range");
-
-			   tr[0] = grub_host_to_target32 (0x46c04778); /* bx pc; nop  */
-			   tr[1] = grub_host_to_target32 (((new_offset >> 2) & 0xffffff) | 0xea000000); /* b new_offset */
-			   tr += 2;
-			   sym_addr = tr_addr | 1;
-			 }
+			 grub_util_error("inserting trampolines is no longer supported");
 		       sym_addr -= offset;
 		       /* Thumb instructions can be 16-bit aligned */
 		       if (ELF_R_TYPE (info) == R_ARM_THM_JUMP19)
@@ -1354,21 +1333,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		       grub_err_t err;
 		       grub_util_info ("  JUMP24:\ttarget=0x%08lx\toffset=(0x%08x)",  (unsigned long) ((char *) target - (char *) e), sym_addr);
 		       if (sym_addr & 1)
-			 {
-			   grub_uint32_t tr_addr;
-			   grub_int32_t new_offset;
-			   tr_addr = (char *) tr - (char *) pe_target
-			     - target_section_addr;
-			   new_offset = sym_addr - tr_addr - 12;
-
-			   /* There is no immediate version of bx, only register one...  */
-			   tr[0] = grub_host_to_target32 (0xe59fc004); /* ldr	ip, [pc, #4] */
-			   tr[1] = grub_host_to_target32 (0xe08cc00f); /* add	ip, ip, pc */
-			   tr[2] = grub_host_to_target32 (0xe12fff1c); /* bx	ip */
-			   tr[3] = grub_host_to_target32 (new_offset | 1);
-			   tr += 4;
-			   sym_addr = tr_addr;
-			 }
+			 grub_util_error("inserting trampolines is no longer supported");
 		       sym_addr -= offset;
 		       err = grub_arm_reloc_jump24 (target,
 						    sym_addr);
@@ -1401,7 +1366,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  */
 
 		 sym_addr += addend;
-		 off = sym_addr - target_section_addr - offset - image_target->vaddr_offset;
+		 off = sym_addr - target_section_vaddr - offset - image_target->vaddr_offset;
 
 		 switch (ELF_R_TYPE (info))
 		   {
@@ -1530,7 +1495,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 
 			   rel2_offset = grub_target_to_host (rel2->r_offset);
 			   rel2_info = grub_target_to_host (rel2->r_info);
-			   rel2_loc = target_section_addr + rel2_offset + image_target->vaddr_offset;
+			   rel2_loc = target_section_vaddr + rel2_offset + image_target->vaddr_offset;
 
 			   if (ELF_R_TYPE (rel2_info) == R_RISCV_PCREL_HI20
 			       && rel2_loc == sym_addr)
@@ -1731,7 +1696,7 @@ translate_relocation_pe (struct translate_context *ctx,
   switch (image_target->elf_target)
     {
     case EM_386:
-      if (ELF_R_TYPE (info) == R_386_32)
+      if (ELF_R_TYPE (info) == R_386_32 || ELF_R_TYPE (info) == R_386_RELATIVE)
 	{
 	  grub_util_info ("adding a relocation entry for 0x%"
 			  GRUB_HOST_PRIxLONG_LONG,
@@ -2587,8 +2552,8 @@ SUFFIX (grub_mkimage_load_image) (const char *kernel_path,
 
 	  grub_ia64_dl_get_tramp_got_size (e, &tramp, &layout->got_size);
 
-	  layout->tramp_off = layout->kernel_size;
-	  layout->kernel_size += ALIGN_UP (tramp, 16);
+	  if (tramp != 0)
+	    grub_util_error("inserting trampolines is no longer supported");
 
 	  layout->ia64jmp_off = layout->kernel_size;
 	  layout->ia64jmpnum = SUFFIX (count_funcs) (e, smd.symtab,
