@@ -945,9 +945,10 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 						   + addend + sym_addr);
 		  grub_util_info ("relocating an R_X86_64_64 entry to 0x%"
 				  GRUB_HOST_PRIxLONG_LONG " at the offset 0x%"
-				  GRUB_HOST_PRIxLONG_LONG " by 0x%lx",
+				  GRUB_HOST_PRIxLONG_LONG " by 0x%" GRUB_HOST_PRIxLONG_LONG,
 				  (unsigned long long) *target,
-				  (unsigned long long) offset,  addend + sym_addr);
+				  (unsigned long long) offset,
+				  (unsigned long long) addend + sym_addr);
 		  break;
 
 		case R_X86_64_JUMP_SLOT:
