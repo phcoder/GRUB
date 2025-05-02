@@ -707,7 +707,7 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
   if (grub_dl_check_header (e, size))
     return 0;
 
-  if (e->e_type != ET_REL && 0)
+  if (e->e_type != ET_DYN)
     {
       grub_error (GRUB_ERR_BAD_MODULE, N_("this ELF file is not of the right type"));
       return 0;

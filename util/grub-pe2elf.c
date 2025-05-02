@@ -370,9 +370,21 @@ write_reloc_section (FILE* fp, const char *name, char *image,
 		}
             }
 
+	  grub_uint32_t symidx = symtab_map[pe_rel->symtab_index];
+
+	  if (ELF_ST_TYPE(symtab[symtab_map[pe_rel->symtab_index]].st_info) == STT_SECTION)
+	    {
+#if GRUB_TARGET_WORDSIZE == 64
+		  rel[num_rels].r_addend += elf_locate[symtab[symtab_map[pe_rel->symtab_index]].st_shndx];
+#else
+		  modified = 1;
+		  *addr += elf_locate[symtab[symtab_map[pe_rel->symtab_index]].st_shndx];
+#endif
+		  symidx = 0;
+	    }
+
           rel[num_rels].r_offset = elf_ofs;
-          rel[num_rels].r_info = ELF_R_INFO (symtab_map[pe_rel->symtab_index],
-					     type);
+          rel[num_rels].r_info = ELF_R_INFO (symidx, type);
           num_rels++;
         }
 

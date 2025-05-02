@@ -69,7 +69,11 @@ if test x@TARGET_APPLE_LINKER@ != x1; then
 	if test x@target_cpu@ != xmips && test x@target_cpu@ != xmipsel && test x@target_cpu@ != xia64; then
 	    STRIP_FLAGS="$STRIP_FLAGS -R .dynamic"
 	fi
-	@TARGET_STRIP@ $STRIP_FLAGS -s $tmpfile || exit 1
+	case "@target_os@" in
+	    cygwin*|mingw32*|mingw64*)		;;
+	    *)					STRIP_FLAGS="$STRIP_FLAGS -s";;
+	esac
+	@TARGET_STRIP@ $STRIP_FLAGS $tmpfile || exit 1
     else
 	@TARGET_CC@ -Wl,--export-dynamic -o $tmpfile2 -shared -nostdlib $tmpfile
 	cp $tmpfile2 $tmpfile
