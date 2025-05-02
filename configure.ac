@@ -278,6 +278,7 @@ case "${target_cpu}-$platform" in
 	;;
 esac
 
+AC_SUBST(TARGET_RELOCATABLE)
 AC_SUBST(TARGET_LINK_ADDR)
 AC_SUBST(TARGET_DECOMPRESSOR_LINK_ADDR)
 
@@ -1241,11 +1242,14 @@ elif test x"$target_cpu" = xi386 || test x"$target_cpu" = xx86_64; then
     AC_MSG_ERROR([no suitable link format found])
   fi
   TARGET_LDFLAGS="$TARGET_LDFLAGS -Wl,$grub_cv_target_cc_link_format"
+  TARGET_RELOCATABLE='-shared'
   if test x"$grub_cv_target_cc_link_format" = x-mi386pe ; then
     TARGET_OBJ2ELF='./build-grub-pe2elf$(BUILD_EXEEXT)'
+    TARGET_RELOCATABLE='-Wl,-r'
   fi
   if test x"$grub_cv_target_cc_link_format" = x-mi386pep ; then
     TARGET_OBJ2ELF='./build-grub-pep2elf$(BUILD_EXEEXT)'
+    TARGET_RELOCATABLE='-Wl,-r'
   fi
 fi
 
