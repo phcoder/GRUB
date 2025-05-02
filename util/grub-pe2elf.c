@@ -332,7 +332,7 @@ write_reloc_section (FILE* fp, const char *name, char *image,
 	    }
 
           if (type ==
-#if GRUB_TARGET_WORDSIZE == 64
+#if GRUB_TARGET_WORDSIZE == 32
 	      R_386_PC32
 #else
 	      R_X86_64_PC32
@@ -372,15 +372,49 @@ write_reloc_section (FILE* fp, const char *name, char *image,
 
 	  grub_uint32_t symidx = symtab_map[pe_rel->symtab_index];
 
-	  if (ELF_ST_TYPE(symtab[symtab_map[pe_rel->symtab_index]].st_info) == STT_SECTION)
+	  if (symtab[symtab_map[pe_rel->symtab_index]].st_shndx != STN_UNDEF)
 	    {
 #if GRUB_TARGET_WORDSIZE == 64
-		  rel[num_rels].r_addend += elf_locate[symtab[symtab_map[pe_rel->symtab_index]].st_shndx];
-#else
+	      if (type == R_X86_64_PC32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  *addr += rel[num_rels].r_addend;
 		  modified = 1;
-		  *addr += elf_locate[symtab[symtab_map[pe_rel->symtab_index]].st_shndx];
-#endif
+		  continue;
+		}
+
+	      if (type == R_X86_64_PC64)
+		{
+		  *(grub_uint64_t *)addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  *(grub_uint64_t *)addr += rel[num_rels].r_addend;
+		  modified = 1;
+		  continue;
+		}
+
+	      if (type == R_X86_64_64)
+		{
+		  rel[num_rels].r_addend += *(grub_uint64_t *)addr;
+		  rel[num_rels].r_addend += symtab[symtab_map[pe_rel->symtab_index]].st_value;
+		  *(grub_uint64_t *)addr = 0;
+		  modified = 1;
 		  symidx = 0;
+		  type = R_X86_64_RELATIVE;
+		}
+#else
+	      if (type == R_386_PC32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value - elf_ofs;
+		  modified = 1;
+		  continue;
+		}
+	      if (type == R_386_32)
+		{
+		  *addr += symtab[symtab_map[pe_rel->symtab_index]].st_value;
+		  modified = 1;
+		  symidx = 0;
+		  type = R_386_RELATIVE;
+		}
+#endif
 	    }
 
           rel[num_rels].r_offset = elf_ofs;
