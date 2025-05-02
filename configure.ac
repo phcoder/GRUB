@@ -800,6 +800,12 @@ case "x$target_cpu-$platform" in
 	TARGET_RUST_ENABLED=no
 	;;
 esac
+case "$target_os" in
+  cygwin*|mingw32*|mingw64*)
+	AC_MSG_WARN([Rust is not yet supported on $target_os])
+	TARGET_RUST_ENABLED=no
+  ;;
+esac
 if test "x$TARGET_RUST_TARGET_SHORT" = x ; then
    TARGET_RUST_TARGET_SHORT="$TARGET_RUST_TARGET"
 fi
