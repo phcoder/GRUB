@@ -51,10 +51,10 @@ kernel = {
 
   emu_ldflags              = '-Wl,-r';
   i386_efi_cflags          = '-fshort-wchar';
-  i386_efi_ldflags         = '-shared';
+  i386_efi_ldflags         = '$(TARGET_RELOCATABLE)';
   i386_efi_stripflags      = '--strip-unneeded -K start -R .note -R .comment -R .note.gnu.gold-version';
   x86_64_efi_cflags        = '-fshort-wchar';
-  x86_64_efi_ldflags       = '-shared';
+  x86_64_efi_ldflags       = '$(TARGET_RELOCATABLE)';
   x86_64_efi_stripflags    = '--strip-unneeded -K start -R .note -R .comment -R .note.gnu.gold-version';
 
   ia64_efi_cflags = '-fshort-wchar -fno-builtin -fpic';
