@@ -18,7 +18,7 @@ BEGIN {
 
 {
   if ($1 == "defined") {
-    if ($3 !~ /^\.refptr\./ && $3 != "grub_mod_init" && $3 != "grub_mod_fini" && $3 != "__bss_start" && $3 != "_fdata" && $3 != "_ftext" && $3 != "_fbss" && $3 != "_edata" && $3 != "_end" && $3 != "__aeabi_uidivmod" && $3 != "__aeabi_idivmod" && $3 in symtab) {
+    if ($3 !~ /^\.refptr\./ && $3 != "grub_mod_init" && $3 != "grub_mod_fini" && $3 != "_grub_mod_init" && $3 != "_grub_mod_fini" && $3 != "__bss_start" && $3 != "_fdata" && $3 != "_ftext" && $3 != "_fbss" && $3 != "_edata" && $3 != "_end" && $3 != "__aeabi_uidivmod" && $3 != "__aeabi_idivmod" && $3 in symtab) {
       printf "%s in %s is duplicated in %s\n", $3, $2, symtab[$3] >"/dev/stderr";
       error++;
     }

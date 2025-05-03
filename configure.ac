@@ -1259,6 +1259,9 @@ elif test x"$target_cpu" = xi386 || test x"$target_cpu" = xx86_64; then
   fi
 fi
 
+TARGET_LDFORMAT="$grub_cv_target_cc_link_format"
+AC_SUBST(TARGET_LDFORMAT)
+
 if test x$grub_cv_target_cc_link_format = x-arch,i386 || test x$grub_cv_target_cc_link_format = x-arch,x86_64; then
    TARGET_APPLE_LINKER=1
    AC_CHECK_PROG([TARGET_OBJCONV], [objconv], [objconv], [])
@@ -2292,7 +2295,7 @@ AM_CONDITIONAL([COND_sparc64_ieee1275], [test x$target_cpu = xsparc64 -a x$platf
 AM_CONDITIONAL([COND_sparc64_emu], [test x$target_cpu = xsparc64 -a x$platform = xemu])
 AM_CONDITIONAL([COND_x86_64_efi], [test x$target_cpu = xx86_64 -a x$platform = xefi])
 AM_CONDITIONAL([COND_x86_64_xen], [test x$target_cpu = xx86_64 -a x$platform = xxen])
-AM_CONDITIONAL([COND_i386], [test x$target_cpu = xi386])
+AM_CONDITIONAL([COND_i386_opt], [test x$target_cpu = xi386 -a x"$grub_cv_target_cc_link_format" != x-mi386pe])
 
 AM_CONDITIONAL([COND_HOST_HURD], [test x$host_kernel = xhurd])
 AM_CONDITIONAL([COND_HOST_LINUX], [test x$host_kernel = xlinux])

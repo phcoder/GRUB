@@ -2382,7 +2382,7 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
 	    min_vaddr = grub_target_to_host (p->p_vaddr);
 	  if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_vaddr)
 	    max_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);
-	  if (grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz) > max_filled_vaddr)
+	  if (p->p_filesz != 0 && grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz) > max_filled_vaddr)
 	    max_filled_vaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_filesz);
 	  if ((grub_target_to_host32 (p->p_flags) & PF_X) && grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz) > max_execvaddr)
 	    max_execvaddr = grub_target_to_host (p->p_vaddr) + grub_target_to_host (p->p_memsz);

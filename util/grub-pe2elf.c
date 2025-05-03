@@ -64,7 +64,6 @@ static int strtab_max, strtab_len;
 static Elf_Ehdr ehdr;
 static Elf_Shdr *shdr;
 static Elf_Phdr *phdr;
-static grub_uint64_t *elf_locate;
 static int num_sections, num_phdr, first_reloc_section, reloc_sections_end, symtab_section, strtab_section;
 static grub_uint32_t offset, image_base;
 
@@ -108,7 +107,6 @@ write_section_data (FILE* fp, const char *name, char *image,
   section_map[0] = 0;
   shdr = xcalloc (2 * pe_chdr->num_sections + 5, sizeof (shdr[0]));
   phdr = xcalloc (pe_chdr->num_sections, sizeof (shdr[0]));
-  elf_locate = xcalloc (pe_chdr->num_sections + 5, sizeof (elf_locate[0]));
   idx = 1;
   pidx = 0;
   idx_reloc = pe_chdr->num_sections + 1;
@@ -189,22 +187,31 @@ write_section_data (FILE* fp, const char *name, char *image,
                                        GRUB_PE32_SCN_ALIGN_SHIFT) &
                                       GRUB_PE32_SCN_ALIGN_MASK) - 1);
 
-	  if (cur_flags != phdr[pidx].p_flags && align < 4096)
-	    align = 4096;
+	  if (pe_chdr->characteristics & GRUB_PE32_EXECUTABLE_IMAGE)
+	    {
+	      phdr[pidx].p_align = align;
 
-	  cur_flags = phdr[pidx].p_flags;
+	      phdr[pidx].p_vaddr = shdr[idx].sh_addr;
+	      phdr[pidx].p_paddr = shdr[idx].sh_addr;
+	      phdr[pidx].p_memsz = secsize;
+	    }
+	  else
+	    {
+	      if (cur_flags != phdr[pidx].p_flags && align < 4096)
+		align = 4096;
 
-	  phdr[pidx].p_align = align;
-	  cur_addr = (cur_addr + align - 1) & ~(align - 1);
+	      cur_flags = phdr[pidx].p_flags;
 
-	  elf_locate[idx] = cur_addr;
+	      phdr[pidx].p_align = align;
+	      cur_addr = (cur_addr + align - 1) & ~(align - 1);
 
-	  phdr[pidx].p_vaddr = cur_addr;
-	  phdr[pidx].p_paddr = cur_addr;
-	  phdr[pidx].p_memsz = secsize;
-	  shdr[idx].sh_addr = cur_addr;
+	      phdr[pidx].p_vaddr = cur_addr;
+	      phdr[pidx].p_paddr = cur_addr;
+	      phdr[pidx].p_memsz = secsize;
+	      shdr[idx].sh_addr = cur_addr;
 
-	  cur_addr += secsize;
+	      cur_addr += secsize;
+	    }
 	}
 
       if (shdr[idx].sh_type != SHT_NOBITS)
@@ -282,7 +289,7 @@ write_reloc_section (FILE* fp, const char *name, char *image,
       rel = (elf_reloc_t *) xcalloc (pe_sec->num_relocations, sizeof (elf_reloc_t));
       num_rels = 0;
       modified = 0;
-      elf_load_offset = -pe_sec->virtual_address + elf_locate[section_map[shdr[i].sh_link + 1]];
+      elf_load_offset = -pe_sec->virtual_address + shdr[section_map[shdr[i].sh_link + 1]].sh_addr;
 
       for (j = 0; j < pe_sec->num_relocations; j++, pe_rel++)
         {
@@ -520,7 +527,7 @@ write_symbol_table (FILE* fp, const char *name, char *image,
         }
 
       symtab[num_syms].st_shndx = section_map[pe_symtab->section];
-      symtab[num_syms].st_value = pe_symtab->value + elf_locate[section_map[pe_symtab->section]];
+      symtab[num_syms].st_value = pe_symtab->value + shdr[section_map[pe_symtab->section]].sh_addr;
       symtab[num_syms].st_info = ELF_ST_INFO (bind, type);
 
       symtab_map[i] = num_syms;
