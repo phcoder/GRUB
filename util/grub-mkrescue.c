@@ -670,7 +670,11 @@ main (int argc, char *argv[])
 						 "i386-pc", 0);
 	      sz = ftello (sa);
 	      fflush (sa);
+#ifdef __CYGWIN__
+	      fsync (fileno (sa));
+#else
 	      grub_util_fd_sync (fileno (sa));
+#endif
 	      fclose (sa);
 
 	      if (sz > 32768)
