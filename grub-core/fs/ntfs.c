@@ -175,7 +175,7 @@ validate_attribute (grub_uint8_t *attr, void *end)
 	   * the minimum size.
 	   */
 	  min_size += (attr[curr] & 0x7) + ((attr[curr] >> 4) & 0x7);
-	  curr += min_size;
+	  curr = min_size;
 	  min_size++;
 	  if (min_size > attr_size)
 	    goto fail;
